@@ -117,10 +117,22 @@ def navigation():
 def page_inicio():
     user = st.session_state.user
     rol = user.get("Rol", "Responsable")
+    email = user.get("Correo", "").strip().lower()
     st.markdown('<div class="section-title">📊 Dashboard General</div>', unsafe_allow_html=True)
 
     instances = sm.get_all_records(C.HOJA_INSTANCIAS)
     avances = sm.get_all_records(C.HOJA_AVANCE)
+
+    # Filter: Responsables only see processes where they have tasks
+    if rol == "Responsable":
+        my_inst_ids = set(a.get("ID_Instancia") for a in avances
+                          if a.get("Correo", "").strip().lower() == email)
+        instances = [i for i in instances if i.get("ID_Instancia") in my_inst_ids]
+        avances = [a for a in avances if a.get("ID_Instancia") in my_inst_ids]
+    elif rol == "Gerente":
+        instances = [i for i in instances if i.get("Gerente_Responsable") == user.get("Nombre")]
+        inst_ids = set(i.get("ID_Instancia") for i in instances)
+        avances = [a for a in avances if a.get("ID_Instancia") in inst_ids]
 
     active = [i for i in instances if i.get("Estatus") == "En Proceso"]
     completed = [i for i in instances if i.get("Estatus") == "Completado"]
@@ -754,6 +766,16 @@ def page_ver_instancia():
     inst_avances = [a for a in avances if a["ID_Instancia"] == inst_id]
     inst_avances.sort(key=lambda x: int(x.get("Numero_Actividad", 0)))
 
+    # Access control: Responsables can only view processes where they have tasks
+    user = st.session_state.user
+    rol = user.get("Rol", "Responsable")
+    email = user.get("Correo", "").strip().lower()
+    if rol == "Responsable":
+        my_tasks_here = [a for a in inst_avances if a.get("Correo", "").strip().lower() == email]
+        if not my_tasks_here:
+            st.error("No tienes acceso a este proceso.")
+            return
+
     evidencias = sm.get_all_records(C.HOJA_EVIDENCIAS)
     inst_evidencias = [e for e in evidencias if e["ID_Instancia"] == inst_id]
 
@@ -869,27 +891,26 @@ def page_ver_instancia():
             ev_html = "📎 " + ", ".join([f"<a href='{e.get('URL_Cloudinary','')}' target='_blank'>{e.get('Nombre_Archivo','')}</a>"
                                           for e in act_evidencias])
 
-        st.markdown(f"""
-        <div class="activity-card {css_class}">
-            <div class="activity-header">
-                <div style="display:flex;align-items:center;">
-                    <span class="activity-num">{act.get('Numero_Actividad','')}</span>
-                    <div>
-                        <span class="activity-title">{act.get('Actividad','')}</span>
-                        <div class="activity-desc">
-                            {avatar(act.get('Responsable',''))} {act.get('Responsable','')}
-                            &nbsp;·&nbsp; Plazo: {act.get('Dias_Teoricos','')}d
-                        </div>
-                    </div>
-                </div>
-                <div>{badge_html}</div>
-            </div>
-            <div style="font-size:0.78rem;color:#888;margin-top:0.3rem;">
-                {dates_html}
-                {f' · {ev_html}' if ev_html else ''}
-            </div>
-        </div>
-        """, unsafe_allow_html=True)
+        # Build card HTML as compact string to avoid Streamlit rendering issues
+        ev_info = f" · {ev_html}" if ev_html else ""
+        card_html = (
+            f'<div class="activity-card {css_class}">'
+            f'<div class="activity-header">'
+            f'<div style="display:flex;align-items:center;">'
+            f'<span class="activity-num">{act.get("Numero_Actividad","")}</span>'
+            f'<div>'
+            f'<span class="activity-title">{act.get("Actividad","")}</span>'
+            f'<div class="activity-desc">'
+            f'{avatar(act.get("Responsable",""))} {act.get("Responsable","")}'
+            f' &middot; Plazo: {act.get("Dias_Teoricos","")}d'
+            f'</div></div></div>'
+            f'<div>{badge_html}</div>'
+            f'</div>'
+            f'<div style="font-size:0.78rem;color:#888;margin-top:0.3rem;">'
+            f'{dates_html}{ev_info}'
+            f'</div></div>'
+        )
+        st.markdown(card_html, unsafe_allow_html=True)
 
     # Comments section
     if inst_comentarios:
