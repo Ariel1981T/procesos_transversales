@@ -1,6 +1,6 @@
 """
 Gestión de datos en Google Sheets para la Plataforma de Procesos Transversales
-Con caché y reintentos para evitar errores de API rate limiting.
+Versión optimizada con caché agresivo para evitar rate limiting de Google API.
 """
 import gspread
 from google.oauth2.service_account import Credentials
@@ -16,7 +16,7 @@ SCOPES = [
 ]
 
 
-@st.cache_resource(ttl=300)
+@st.cache_resource(ttl=600)
 def get_client():
     raw = st.secrets["gcp_service_account"]
     if isinstance(raw, str):
@@ -27,64 +27,99 @@ def get_client():
     return gspread.authorize(creds)
 
 
-@st.cache_resource(ttl=120)
-def get_spreadsheet():
+@st.cache_resource(ttl=600)
+def _get_spreadsheet():
     client = get_client()
     return client.open_by_key(st.secrets["spreadsheet_id"])
 
 
-def _retry(func, max_retries=3, delay=2):
-    """Execute a function with automatic retry on API errors."""
+@st.cache_resource(ttl=600)
+def _get_ws(name):
+    """Cache worksheet references to avoid repeated API calls."""
+    ss = _get_spreadsheet()
+    try:
+        return ss.worksheet(name)
+    except gspread.exceptions.WorksheetNotFound:
+        ws = ss.add_worksheet(title=name, rows=1000, cols=20)
+        headers = C.HEADERS.get(name, [])
+        if headers:
+            ws.update("A1", [headers])
+        return ws
+
+
+def _retry(func, max_retries=4, base_delay=3):
+    """Execute with retry and exponential backoff for 429 errors."""
     for attempt in range(max_retries):
         try:
             return func()
         except gspread.exceptions.APIError as e:
+            error_code = getattr(e, 'response', None)
+            status = error_code.status_code if error_code else 0
             if attempt < max_retries - 1:
-                time.sleep(delay * (attempt + 1))
-                # Clear spreadsheet cache to get fresh connection
-                get_spreadsheet.clear()
+                wait = base_delay * (2 ** attempt)  # 3, 6, 12, 24 seconds
+                time.sleep(wait)
+            else:
+                raise e
+        except Exception as e:
+            if attempt < max_retries - 1:
+                time.sleep(base_delay)
             else:
                 raise e
 
 
-def _get_sheet(name):
-    def _do():
-        ss = get_spreadsheet()
-        try:
-            return ss.worksheet(name)
-        except gspread.exceptions.WorksheetNotFound:
-            ws = ss.add_worksheet(title=name, rows=1000, cols=20)
-            headers = C.HEADERS.get(name, [])
-            if headers:
-                ws.update("A1", [headers])
-            return ws
-    return _retry(_do)
+# ── In-memory cache for sheet data ──
+if "_sheets_cache" not in st.session_state:
+    st.session_state._sheets_cache = {}
+if "_sheets_cache_time" not in st.session_state:
+    st.session_state._sheets_cache_time = {}
+
+CACHE_TTL = 30  # seconds
 
 
-@st.cache_data(ttl=15)
 def get_all_records(sheet_name):
+    """Read all records with in-memory session cache."""
+    cache = st.session_state._sheets_cache
+    cache_time = st.session_state._sheets_cache_time
+    now = time.time()
+
+    # Return cached if fresh
+    if sheet_name in cache and sheet_name in cache_time:
+        if now - cache_time[sheet_name] < CACHE_TTL:
+            return cache[sheet_name]
+
+    # Fetch from API with retry
     def _do():
-        ws = _get_sheet(sheet_name)
+        ws = _get_ws(sheet_name)
         return ws.get_all_records()
-    return _retry(_do)
+
+    data = _retry(_do)
+    cache[sheet_name] = data
+    cache_time[sheet_name] = now
+    return data
 
 
-def clear_cache(sheet_name=None):
-    """Clear cached data to force fresh reads."""
-    get_all_records.clear()
+def _invalidate(sheet_name):
+    """Mark a specific sheet cache as stale."""
+    if sheet_name in st.session_state._sheets_cache_time:
+        st.session_state._sheets_cache_time[sheet_name] = 0
+
+
+def _invalidate_all():
+    """Mark all caches as stale."""
+    st.session_state._sheets_cache_time = {}
 
 
 def append_row(sheet_name, row_data):
     def _do():
-        ws = _get_sheet(sheet_name)
+        ws = _get_ws(sheet_name)
         ws.append_row(row_data, value_input_option="USER_ENTERED")
     _retry(_do)
-    get_all_records.clear()
+    _invalidate(sheet_name)
 
 
 def update_cell_by_id(sheet_name, id_column, id_value, target_column, new_value):
     def _do():
-        ws = _get_sheet(sheet_name)
+        ws = _get_ws(sheet_name)
         records = ws.get_all_values()
         if not records:
             return False
@@ -99,13 +134,13 @@ def update_cell_by_id(sheet_name, id_column, id_value, target_column, new_value)
                 return True
         return False
     result = _retry(_do)
-    get_all_records.clear()
+    _invalidate(sheet_name)
     return result
 
 
 def update_row_by_id(sheet_name, id_column, id_value, updates_dict):
     def _do():
-        ws = _get_sheet(sheet_name)
+        ws = _get_ws(sheet_name)
         records = ws.get_all_values()
         if not records:
             return False
@@ -115,17 +150,15 @@ def update_row_by_id(sheet_name, id_column, id_value, updates_dict):
             return False
         for i, row in enumerate(records[1:], start=2):
             if row[id_col_idx] == str(id_value):
-                # Batch updates: collect all cells to update
-                cells_to_update = []
+                # Batch update: build range and values
                 for col_name, value in updates_dict.items():
                     if col_name in headers:
                         col_idx = headers.index(col_name)
                         ws.update_cell(i, col_idx + 1, str(value))
-                        time.sleep(0.3)  # Small delay between updates
                 return True
         return False
     result = _retry(_do)
-    get_all_records.clear()
+    _invalidate(sheet_name)
     return result
 
 
@@ -213,8 +246,8 @@ def remaining_business_days(deadline):
 # ── Initialize spreadsheet ──
 def init_spreadsheet():
     for sheet_name in C.HEADERS:
-        _get_sheet(sheet_name)
-        time.sleep(1)  # Avoid rate limiting during init
+        _get_ws(sheet_name)
+        time.sleep(2)
 
 
 # ── User management ──
@@ -265,13 +298,16 @@ def auto_register_users(activities_df):
                 append_row(C.HOJA_USUARIOS, list(new_user.values()))
                 new_users.append(new_user)
                 existing_emails.add(email)
-                time.sleep(0.5)  # Avoid rate limiting
+                time.sleep(1)
 
     return new_users, discrepancies
 
 
-# ── Log ──
+# ── Log (non-blocking) ──
 def log_action(usuario, accion, entidad, id_entidad, detalle=""):
-    now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    log_id = f"LOG-{datetime.now().strftime('%Y%m%d%H%M%S')}"
-    append_row(C.HOJA_LOG, [log_id, now, usuario, accion, entidad, id_entidad, detalle])
+    try:
+        now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        log_id = f"LOG-{datetime.now().strftime('%Y%m%d%H%M%S')}"
+        append_row(C.HOJA_LOG, [log_id, now, usuario, accion, entidad, id_entidad, detalle])
+    except Exception:
+        pass  # Log errors should never break the app
