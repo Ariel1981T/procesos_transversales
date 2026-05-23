@@ -575,6 +575,17 @@ def launch_instance_form():
     st.markdown(f'<div class="section-title">🚀 Lanzar Instancia de: {tpl.get("Nombre", "")}</div>',
                 unsafe_allow_html=True)
 
+    # Show template summary
+    st.markdown(f"""
+    <div class="info-box">
+        📋 <strong>Plantilla:</strong> {tpl.get('Nombre', '')} (v{tpl.get('Version', 1)})<br>
+        🔢 <strong>Actividades:</strong> {tpl.get('Num_Actividades', 0)} &nbsp;|&nbsp;
+        📅 <strong>Días teóricos:</strong> {tpl.get('Dias_Teoricos_Total', 0)} &nbsp;|&nbsp;
+        🏢 <strong>Área:</strong> {tpl.get('Area_Origen', '')} &nbsp;|&nbsp;
+        🔄 <strong>Usos anteriores:</strong> {tpl.get('Veces_Utilizada', 0)}
+    </div>
+    """, unsafe_allow_html=True)
+
     with st.form("launch_form"):
         nombre_inst = st.text_input("📋 Nombre de la Instancia",
                                      placeholder="Ej. PROD. JULIO RECEP. SEPTIEMBRE 2026")
@@ -582,14 +593,6 @@ def launch_instance_form():
         c1, c2 = st.columns(2)
         unidades = c1.number_input("📦 Unidades (si aplica)", min_value=0, value=0)
         importe = c2.number_input("💰 Importe (si aplica)", min_value=0.0, value=0.0, format="%.2f")
-
-        user_rol = st.session_state.user.get("Rol", "")
-        need_auth = True
-        auth_code = ""
-        if user_rol in ["PM", "Admin"]:
-            need_auth = st.checkbox("Requiere número de confirmación", value=True)
-        if need_auth:
-            auth_code = st.text_input("🔑 Número de Confirmación", placeholder="PT-2026-001")
 
         col1, col2 = st.columns(2)
         submit = col1.form_submit_button("🚀 Lanzar Proceso", type="primary", use_container_width=True)
@@ -604,17 +607,6 @@ def launch_instance_form():
         if not nombre_inst:
             st.error("Ingresa un nombre para la instancia.")
             return
-
-        # Validate auth if needed
-        if need_auth:
-            if not auth_code:
-                st.error("Ingresa el número de confirmación.")
-                return
-            auths = sm.get_all_records(C.HOJA_AUTORIZACIONES)
-            auth_record = next((a for a in auths if a["ID_Autorizacion"] == auth_code.strip()), None)
-            if not auth_record or auth_record.get("Estatus") != "Vigente":
-                st.error("❌ Número de confirmación inválido o no vigente.")
-                return
 
         # Get template activities
         all_acts = sm.get_all_records(C.HOJA_ACTIVIDADES_PLANTILLA)
@@ -635,7 +627,7 @@ def launch_instance_form():
         sm.append_row(C.HOJA_INSTANCIAS, [
             inst_id, tpl_id, nombre_inst, descripcion, user.get("Nombre", ""),
             now.strftime("%Y-%m-%d"), fecha_est_fin, "", "En Proceso", 0,
-            auth_code if need_auth else "N/A",
+            tpl.get("ID_Autorizacion", "Plantilla aprobada"),
             unidades if unidades > 0 else "",
             importe if importe > 0 else ""
         ])
@@ -674,13 +666,6 @@ def launch_instance_form():
         # Update template usage count
         veces = int(tpl.get("Veces_Utilizada", 0)) + 1
         sm.update_cell_by_id(C.HOJA_PLANTILLAS, "ID_Plantilla", tpl_id, "Veces_Utilizada", veces)
-
-        # Consume auth if used
-        if need_auth and auth_code:
-            sm.update_row_by_id(C.HOJA_AUTORIZACIONES, "ID_Autorizacion", auth_code, {
-                "Estatus": "Consumida", "ID_Vinculado": inst_id,
-                "Fecha_Consumo": now.strftime("%Y-%m-%d")
-            })
 
         sm.log_action(user["Nombre"], "Lanzar instancia", "Instancia", inst_id, nombre_inst)
 
