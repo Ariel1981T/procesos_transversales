@@ -1,11 +1,13 @@
 """
 Gestión de datos en Google Sheets para la Plataforma de Procesos Transversales
+Con caché y reintentos para evitar errores de API rate limiting.
 """
 import gspread
 from google.oauth2.service_account import Credentials
 import streamlit as st
 from datetime import datetime, timedelta
 import json
+import time
 import config as C
 
 SCOPES = [
@@ -25,70 +27,106 @@ def get_client():
     return gspread.authorize(creds)
 
 
+@st.cache_resource(ttl=120)
 def get_spreadsheet():
     client = get_client()
     return client.open_by_key(st.secrets["spreadsheet_id"])
 
 
+def _retry(func, max_retries=3, delay=2):
+    """Execute a function with automatic retry on API errors."""
+    for attempt in range(max_retries):
+        try:
+            return func()
+        except gspread.exceptions.APIError as e:
+            if attempt < max_retries - 1:
+                time.sleep(delay * (attempt + 1))
+                # Clear spreadsheet cache to get fresh connection
+                get_spreadsheet.clear()
+            else:
+                raise e
+
+
 def _get_sheet(name):
-    ss = get_spreadsheet()
-    try:
-        return ss.worksheet(name)
-    except gspread.exceptions.WorksheetNotFound:
-        ws = ss.add_worksheet(title=name, rows=1000, cols=20)
-        headers = C.HEADERS.get(name, [])
-        if headers:
-            ws.update("A1", [headers])
-            ws.format("1", {"textFormat": {"bold": True},
-                            "backgroundColor": {"red": 0.05, "green": 0.17, "blue": 0.43}})
-        return ws
+    def _do():
+        ss = get_spreadsheet()
+        try:
+            return ss.worksheet(name)
+        except gspread.exceptions.WorksheetNotFound:
+            ws = ss.add_worksheet(title=name, rows=1000, cols=20)
+            headers = C.HEADERS.get(name, [])
+            if headers:
+                ws.update("A1", [headers])
+            return ws
+    return _retry(_do)
 
 
+@st.cache_data(ttl=15)
 def get_all_records(sheet_name):
-    ws = _get_sheet(sheet_name)
-    data = ws.get_all_records()
-    return data
+    def _do():
+        ws = _get_sheet(sheet_name)
+        return ws.get_all_records()
+    return _retry(_do)
+
+
+def clear_cache(sheet_name=None):
+    """Clear cached data to force fresh reads."""
+    get_all_records.clear()
 
 
 def append_row(sheet_name, row_data):
-    ws = _get_sheet(sheet_name)
-    ws.append_row(row_data, value_input_option="USER_ENTERED")
+    def _do():
+        ws = _get_sheet(sheet_name)
+        ws.append_row(row_data, value_input_option="USER_ENTERED")
+    _retry(_do)
+    get_all_records.clear()
 
 
 def update_cell_by_id(sheet_name, id_column, id_value, target_column, new_value):
-    ws = _get_sheet(sheet_name)
-    records = ws.get_all_values()
-    if not records:
+    def _do():
+        ws = _get_sheet(sheet_name)
+        records = ws.get_all_values()
+        if not records:
+            return False
+        headers = records[0]
+        id_col_idx = headers.index(id_column) if id_column in headers else -1
+        tgt_col_idx = headers.index(target_column) if target_column in headers else -1
+        if id_col_idx < 0 or tgt_col_idx < 0:
+            return False
+        for i, row in enumerate(records[1:], start=2):
+            if row[id_col_idx] == str(id_value):
+                ws.update_cell(i, tgt_col_idx + 1, new_value)
+                return True
         return False
-    headers = records[0]
-    id_col_idx = headers.index(id_column) if id_column in headers else -1
-    tgt_col_idx = headers.index(target_column) if target_column in headers else -1
-    if id_col_idx < 0 or tgt_col_idx < 0:
-        return False
-    for i, row in enumerate(records[1:], start=2):
-        if row[id_col_idx] == str(id_value):
-            ws.update_cell(i, tgt_col_idx + 1, new_value)
-            return True
-    return False
+    result = _retry(_do)
+    get_all_records.clear()
+    return result
 
 
 def update_row_by_id(sheet_name, id_column, id_value, updates_dict):
-    ws = _get_sheet(sheet_name)
-    records = ws.get_all_values()
-    if not records:
+    def _do():
+        ws = _get_sheet(sheet_name)
+        records = ws.get_all_values()
+        if not records:
+            return False
+        headers = records[0]
+        id_col_idx = headers.index(id_column) if id_column in headers else -1
+        if id_col_idx < 0:
+            return False
+        for i, row in enumerate(records[1:], start=2):
+            if row[id_col_idx] == str(id_value):
+                # Batch updates: collect all cells to update
+                cells_to_update = []
+                for col_name, value in updates_dict.items():
+                    if col_name in headers:
+                        col_idx = headers.index(col_name)
+                        ws.update_cell(i, col_idx + 1, str(value))
+                        time.sleep(0.3)  # Small delay between updates
+                return True
         return False
-    headers = records[0]
-    id_col_idx = headers.index(id_column) if id_column in headers else -1
-    if id_col_idx < 0:
-        return False
-    for i, row in enumerate(records[1:], start=2):
-        if row[id_col_idx] == str(id_value):
-            for col_name, value in updates_dict.items():
-                if col_name in headers:
-                    col_idx = headers.index(col_name)
-                    ws.update_cell(i, col_idx + 1, str(value))
-            return True
-    return False
+    result = _retry(_do)
+    get_all_records.clear()
+    return result
 
 
 def get_next_id(prefix, sheet_name, id_column):
@@ -176,6 +214,7 @@ def remaining_business_days(deadline):
 def init_spreadsheet():
     for sheet_name in C.HEADERS:
         _get_sheet(sheet_name)
+        time.sleep(1)  # Avoid rate limiting during init
 
 
 # ── User management ──
@@ -226,6 +265,7 @@ def auto_register_users(activities_df):
                 append_row(C.HOJA_USUARIOS, list(new_user.values()))
                 new_users.append(new_user)
                 existing_emails.add(email)
+                time.sleep(0.5)  # Avoid rate limiting
 
     return new_users, discrepancies
 
