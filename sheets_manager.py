@@ -16,7 +16,11 @@ SCOPES = [
 
 @st.cache_resource(ttl=300)
 def get_client():
-    creds_dict = json.loads(st.secrets["gcp_service_account"])
+    raw = st.secrets["gcp_service_account"]
+    if isinstance(raw, str):
+        creds_dict = json.loads(raw)
+    else:
+        creds_dict = dict(raw)
     creds = Credentials.from_service_account_info(creds_dict, scopes=SCOPES)
     return gspread.authorize(creds)
 
