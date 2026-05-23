@@ -1,0 +1,144 @@
+"""
+Motor de notificaciones por correo electrónico
+"""
+import smtplib
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
+import streamlit as st
+
+APP_URL = "https://imemsa-procesos.streamlit.app"
+
+
+def _get_smtp():
+    return st.secrets.get("smtp_email", ""), st.secrets.get("smtp_password", "")
+
+
+def _send_email(to_email, subject, html_body):
+    sender, password = _get_smtp()
+    if not sender or not password:
+        return False
+    try:
+        msg = MIMEMultipart("alternative")
+        msg["From"] = f"IMEMSA Procesos <{sender}>"
+        msg["To"] = to_email
+        msg["Subject"] = subject
+        msg.attach(MIMEText(html_body, "html"))
+        with smtplib.SMTP_SSL("smtp.gmail.com", 465) as server:
+            server.login(sender, password)
+            server.sendmail(sender, to_email, msg.as_string())
+        return True
+    except Exception as e:
+        st.warning(f"Error al enviar correo a {to_email}: {e}")
+        return False
+
+
+def _base_template(title, body_html):
+    return f"""
+    <html>
+    <body style="font-family:Arial,sans-serif;margin:0;padding:0;background:#f5f5f5;">
+    <div style="max-width:600px;margin:20px auto;background:white;border-radius:12px;overflow:hidden;box-shadow:0 2px 10px rgba(0,0,0,0.1);">
+        <div style="background:linear-gradient(135deg,#0D2B6E,#1a3f8a);padding:20px 30px;">
+            <h1 style="color:white;margin:0;font-size:20px;">IMEMSA</h1>
+            <p style="color:rgba(255,255,255,0.8);margin:4px 0 0;font-size:13px;">Plataforma de Procesos Transversales</p>
+        </div>
+        <div style="padding:25px 30px;">
+            <h2 style="color:#0D2B6E;margin-top:0;font-size:18px;">{title}</h2>
+            {body_html}
+        </div>
+        <div style="background:#f0f4fa;padding:15px 30px;text-align:center;font-size:12px;color:#666;">
+            <a href="{APP_URL}" style="color:#0D2B6E;font-weight:bold;">Acceder a la Plataforma</a>
+            <p style="margin:8px 0 0;">Grupo IMEMSA &mdash; Este es un correo autom&aacute;tico, no responder.</p>
+        </div>
+    </div>
+    </body></html>
+    """
+
+
+def notify_task_activated(email, nombre, proceso, actividad, plazo_dias, fecha_limite):
+    subject = f"📋 Nueva tarea asignada: {actividad}"
+    body = f"""
+    <p>Hola <strong>{nombre}</strong>,</p>
+    <p>Se te ha asignado una nueva tarea en el proceso <strong>{proceso}</strong>:</p>
+    <div style="background:#f0f4fa;padding:15px;border-radius:8px;border-left:4px solid #0D2B6E;margin:15px 0;">
+        <p style="margin:0;"><strong>Actividad:</strong> {actividad}</p>
+        <p style="margin:5px 0 0;"><strong>Plazo:</strong> {plazo_dias} días hábiles</p>
+        <p style="margin:5px 0 0;"><strong>Fecha límite:</strong> {fecha_limite}</p>
+    </div>
+    <p>Por favor ingresa a la plataforma para dar seguimiento.</p>
+    """
+    return _send_email(email, subject, _base_template("Nueva Tarea Asignada", body))
+
+
+def notify_reminder(email, nombre, actividad, dias_restantes, proceso):
+    subject = f"⚠️ Recordatorio: {actividad} - {dias_restantes} día(s) restante(s)"
+    body = f"""
+    <p>Hola <strong>{nombre}</strong>,</p>
+    <p>Te recordamos que la actividad <strong>{actividad}</strong> del proceso
+    <strong>{proceso}</strong> tiene <strong>{dias_restantes} día(s) hábil(es) restante(s)</strong>.</p>
+    <p>Por favor complétala a la brevedad.</p>
+    """
+    return _send_email(email, subject, _base_template("Recordatorio de Actividad", body))
+
+
+def notify_overdue(email, nombre, actividad, proceso, dias_vencidos):
+    subject = f"🔴 Actividad vencida: {actividad}"
+    body = f"""
+    <p>Hola <strong>{nombre}</strong>,</p>
+    <p>La actividad <strong>{actividad}</strong> del proceso <strong>{proceso}</strong>
+    tiene <strong style="color:#C41E2E;">{dias_vencidos} día(s) de retraso</strong>.</p>
+    <p>Se requiere atención inmediata.</p>
+    """
+    return _send_email(email, subject, _base_template("Actividad Vencida", body))
+
+
+def notify_task_completed(email_gerente, gerente, actividad, responsable, proceso):
+    subject = f"✅ Actividad completada: {actividad}"
+    body = f"""
+    <p>Hola <strong>{gerente}</strong>,</p>
+    <p>La actividad <strong>{actividad}</strong> del proceso <strong>{proceso}</strong>
+    ha sido completada por <strong>{responsable}</strong>.</p>
+    """
+    return _send_email(email_gerente, subject, _base_template("Actividad Completada", body))
+
+
+def notify_process_completed(email, nombre, proceso, folio):
+    subject = f"🎉 Proceso completado: {proceso}"
+    body = f"""
+    <p>Hola <strong>{nombre}</strong>,</p>
+    <p>El proceso <strong>{proceso}</strong> (Folio: <strong>{folio}</strong>)
+    ha sido completado exitosamente.</p>
+    <p>Todas las actividades han sido finalizadas.</p>
+    """
+    return _send_email(email, subject, _base_template("Proceso Completado", body))
+
+
+def notify_confirmation_number(email, nombre, auth_id, proceso, vencimiento):
+    subject = f"🔑 Número de confirmación: {auth_id}"
+    body = f"""
+    <p>Hola <strong>{nombre}</strong>,</p>
+    <p>Se ha generado tu número de confirmación para la plataforma:</p>
+    <div style="background:#f0f4fa;padding:20px;border-radius:8px;text-align:center;margin:15px 0;">
+        <p style="font-size:28px;font-weight:800;color:#0D2B6E;margin:0;">{auth_id}</p>
+    </div>
+    <p><strong>Proceso:</strong> {proceso}</p>
+    <p><strong>Vigencia:</strong> Hasta el {vencimiento}</p>
+    <p>Utiliza este número al crear tu plantilla o lanzar una instancia en la plataforma.</p>
+    """
+    return _send_email(email, subject, _base_template("Número de Confirmación", body))
+
+
+def notify_welcome(email, nombre, proceso, actividad):
+    subject = "🎉 Bienvenido a la Plataforma de Procesos Transversales IMEMSA"
+    body = f"""
+    <p>Hola <strong>{nombre}</strong>,</p>
+    <p>Has sido registrado(a) en la Plataforma de Procesos Transversales del Grupo IMEMSA.</p>
+    <p>Tu primera tarea asignada es:</p>
+    <div style="background:#f0f4fa;padding:15px;border-radius:8px;border-left:4px solid #0D2B6E;margin:15px 0;">
+        <p style="margin:0;"><strong>Proceso:</strong> {proceso}</p>
+        <p style="margin:5px 0 0;"><strong>Actividad:</strong> {actividad}</p>
+    </div>
+    <p><strong>¿Cómo acceder?</strong></p>
+    <p>Ingresa a <a href="{APP_URL}" style="color:#0D2B6E;font-weight:bold;">{APP_URL}</a>
+    con tu correo institucional: <strong>{email}</strong></p>
+    """
+    return _send_email(email, subject, _base_template("Bienvenido a IMEMSA Procesos", body))
