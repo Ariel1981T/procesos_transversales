@@ -6,7 +6,7 @@ from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 import streamlit as st
 
-APP_URL = "https://procesostransversales.streamlit.app"
+APP_URL = "https://procesostransversales2026.streamlit.app"
 
 
 def _get_smtp():
