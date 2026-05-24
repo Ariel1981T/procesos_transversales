@@ -256,41 +256,46 @@ def page_mis_tareas():
         col1, col2, col3 = st.columns([2, 2, 1])
         ev_required = str(task.get("Evidencia_Requerida", "")).lower() in ["sí", "si", "yes", "true", "1"]
         has_evidence = str(task.get("Tiene_Evidencia", "")).lower() in ["sí", "si", "yes", "true", "1"]
+        upload_key = f"ev_{inst_id}_{task.get('Numero_Actividad','')}"
+        uploaded_flag = f"uploaded_{inst_id}_{task.get('Numero_Actividad','')}"
 
         with col1:
-            uploaded = st.file_uploader(
-                "📎 Subir evidencia", key=f"ev_{inst_id}_{task.get('Numero_Actividad','')}",
-                help="Sube un archivo como evidencia de esta actividad"
-            )
-            if uploaded:
-                try:
-                    import cloudinary
-                    import cloudinary.uploader
-                    cloudinary.config(
-                        cloud_name=st.secrets["cloudinary"]["cloud_name"],
-                        api_key=st.secrets["cloudinary"]["api_key"],
-                        api_secret=st.secrets["cloudinary"]["api_secret"]
-                    )
-                    result = cloudinary.uploader.upload(
-                        uploaded.getvalue(),
-                        resource_type="raw",
-                        folder=f"imemsa-procesos/{inst_id}",
-                        public_id=uploaded.name
-                    )
-                    ev_id = f"EV-{datetime.now().strftime('%Y%m%d%H%M%S')}"
-                    sm.append_row(C.HOJA_EVIDENCIAS, [
-                        ev_id, inst_id, task.get("Numero_Actividad", ""),
-                        uploaded.name, result["secure_url"], result["public_id"],
-                        datetime.now().strftime("%Y-%m-%d %H:%M:%S"), user.get("Nombre", "")
-                    ])
-                    sm.update_row_by_id(C.HOJA_AVANCE, "ID_Avance", task.get("ID_Avance", ""),
-                                        {"Tiene_Evidencia": "Sí"})
-                    sm.log_action(user["Nombre"], "Subir evidencia", "Actividad",
-                                  task.get("ID_Avance", ""), uploaded.name)
-                    st.success(f"✅ Evidencia '{uploaded.name}' subida correctamente.")
-                    st.rerun()
-                except Exception as e:
-                    st.error(f"Error al subir evidencia: {e}")
+            uploaded = st.file_uploader("📎 Subir evidencia", key=upload_key)
+            if uploaded and not st.session_state.get(uploaded_flag):
+                if st.button("📤 Confirmar subida", key=f"btn_ev_{inst_id}_{task.get('Numero_Actividad','')}",
+                             type="primary"):
+                    try:
+                        import cloudinary
+                        import cloudinary.uploader
+                        cloudinary.config(
+                            cloud_name=st.secrets["cloudinary"]["cloud_name"],
+                            api_key=st.secrets["cloudinary"]["api_key"],
+                            api_secret=st.secrets["cloudinary"]["api_secret"]
+                        )
+                        result = cloudinary.uploader.upload(
+                            uploaded.getvalue(),
+                            resource_type="raw",
+                            folder=f"imemsa-procesos/{inst_id}",
+                            public_id=uploaded.name
+                        )
+                        ev_id = f"EV-{datetime.now().strftime('%Y%m%d%H%M%S')}"
+                        sm.append_row(C.HOJA_EVIDENCIAS, [
+                            ev_id, inst_id, task.get("Numero_Actividad", ""),
+                            uploaded.name, result["secure_url"], result["public_id"],
+                            datetime.now().strftime("%Y-%m-%d %H:%M:%S"), user.get("Nombre", "")
+                        ])
+                        sm.update_row_by_id(C.HOJA_AVANCE, "ID_Avance", task.get("ID_Avance", ""),
+                                            {"Tiene_Evidencia": "Sí"})
+                        sm.log_action(user["Nombre"], "Subir evidencia", "Actividad",
+                                      task.get("ID_Avance", ""), uploaded.name)
+                        st.session_state[uploaded_flag] = True
+                        st.success(f"✅ Evidencia '{uploaded.name}' subida correctamente.")
+                        st.rerun()
+                    except Exception as e:
+                        st.error(f"Error al subir evidencia: {e}")
+            elif st.session_state.get(uploaded_flag):
+                st.success("✅ Evidencia subida")
+                has_evidence = True
 
         with col2:
             comment = st.text_input("💬 Comentario", key=f"com_{inst_id}_{task.get('Numero_Actividad','')}")
