@@ -57,7 +57,7 @@ HOJA_LOG = "Log_Sistema"
 
 # ── Headers de cada hoja ──
 HEADERS = {
-    HOJA_USUARIOS: ["ID_Usuario", "Nombre", "Correo", "Telefono", "Area", "Rol", "Activo"],
+    HOJA_USUARIOS: ["ID_Usuario", "Nombre", "Correo", "Telefono", "Area", "Rol", "Activo", "Password"],
     HOJA_AUTORIZACIONES: ["ID_Autorizacion", "Tipo", "Solicitante", "Area", "Nombre_Proceso",
                           "PM_Emisor", "Fecha_Emision", "Fecha_Vencimiento", "Estatus",
                           "ID_Vinculado", "Fecha_Consumo"],
