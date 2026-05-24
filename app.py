@@ -283,8 +283,10 @@ def page_mis_tareas():
                         uploaded.name, result["secure_url"], result["public_id"],
                         datetime.now().strftime("%Y-%m-%d %H:%M:%S"), user.get("Nombre", "")
                     ])
+                    import time; time.sleep(2)
                     sm.update_row_by_id(C.HOJA_AVANCE, "ID_Avance", task.get("ID_Avance", ""),
                                         {"Tiene_Evidencia": "Sí"})
+                    import time; time.sleep(2)
                     sm.log_action(user["Nombre"], "Subir evidencia", "Actividad",
                                   task.get("ID_Avance", ""), uploaded.name)
                     st.success(f"✅ Evidencia '{uploaded.name}' subida correctamente.")
@@ -317,6 +319,7 @@ def page_mis_tareas():
 
 
 def complete_activity(task, inst):
+    import time
     user = st.session_state.user
     now = datetime.now()
     inst_id = task["ID_Instancia"]
@@ -333,15 +336,18 @@ def complete_activity(task, inst):
     dias_teoricos = int(task.get("Dias_Teoricos", 0))
     desviacion = dias_reales - dias_teoricos
 
+    st.info("⏳ Actualizando actividad...")
     sm.update_row_by_id(C.HOJA_AVANCE, "ID_Avance", task["ID_Avance"], {
         "Fecha_Cierre": fecha_cierre,
         "Estatus": "Completada",
         "Dias_Reales": dias_reales,
         "Desviacion": desviacion
     })
+    time.sleep(3)
 
     sm.log_action(user["Nombre"], "Completar actividad", "Actividad",
                   task["ID_Avance"], f"Act #{num_act} de {inst_id}")
+    time.sleep(2)
 
     # Notify manager
     notif.notify_task_completed(
@@ -365,6 +371,7 @@ def complete_activity(task, inst):
         fecha_inicio_next = now.strftime("%Y-%m-%d")
         dias_next = int(next_task.get("Dias_Teoricos", 1))
         fecha_limite_next = sm.add_business_days(now.date(), dias_next).strftime("%Y-%m-%d")
+        time.sleep(3)
         sm.update_row_by_id(C.HOJA_AVANCE, "ID_Avance", next_task["ID_Avance"], {
             "Fecha_Inicio": fecha_inicio_next,
             "Fecha_Limite": fecha_limite_next,
@@ -389,6 +396,7 @@ def complete_activity(task, inst):
             inst.get("Gerente_Responsable", ""), inst.get("Gerente_Responsable", ""),
             inst.get("Nombre_Instancia", ""), inst_id
         )
+    time.sleep(3)
     sm.update_row_by_id(C.HOJA_INSTANCIAS, "ID_Instancia", inst_id, updates)
 
     st.success("✅ Actividad completada exitosamente.")
