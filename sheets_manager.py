@@ -6,6 +6,8 @@ import streamlit as st
 from datetime import datetime, timedelta
 from supabase import create_client
 import config as C
+import random
+import string
 
 # ── Table name mapping ──
 TABLE_MAP = {
@@ -51,6 +53,7 @@ COL_MAP = {
     "ID_Log": "id_log", "Fecha_Hora": "fecha_hora", "Usuario": "usuario",
     "Accion": "accion", "Entidad": "entidad", "ID_Entidad": "id_entidad",
     "Detalle": "detalle",
+    "Password": "password",
 }
 
 # Reverse mapping: supabase column -> Google Sheets name
@@ -208,6 +211,13 @@ def init_spreadsheet():
 
 
 # ── User management ──
+def generate_password(length=8):
+    """Generate a random password like: IMEMSA-Xx9y"""
+    chars = string.ascii_letters + string.digits
+    random_part = ''.join(random.choices(chars, k=length))
+    return f"IM-{random_part}"
+
+
 def find_user_by_email(email):
     client = get_client()
     response = client.table("usuarios").select("*").eq("correo", email.strip().lower()).execute()
@@ -250,6 +260,7 @@ def auto_register_users(activities_df):
         else:
             if validate_domain(email):
                 uid = get_next_id("USR-", C.HOJA_USUARIOS, "ID_Usuario")
+                pwd = generate_password()
                 new_user = {
                     "ID_Usuario": uid,
                     "Nombre": str(row.get("Responsable", "")),
@@ -257,7 +268,8 @@ def auto_register_users(activities_df):
                     "Telefono": str(row.get("Telefono", "")),
                     "Area": "",
                     "Rol": "Responsable",
-                    "Activo": "Sí"
+                    "Activo": "Sí",
+                    "Password": pwd
                 }
                 append_row(C.HOJA_USUARIOS, list(new_user.values()))
                 new_users.append(new_user)
