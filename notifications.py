@@ -1,5 +1,5 @@
 """
-Motor de notificaciones por correo electrónico
+Motor de notificaciones por correo electrónico y WhatsApp
 """
 import smtplib
 from email.mime.text import MIMEText
@@ -8,6 +8,10 @@ import streamlit as st
 
 APP_URL = "https://procesostransversales2026.streamlit.app"
 
+
+# ══════════════════════════════════════════════
+#  EMAIL
+# ══════════════════════════════════════════════
 
 def _get_smtp():
     email = st.secrets.get("smtp_email", "")
@@ -18,7 +22,7 @@ def _get_smtp():
 def _send_email(to_email, subject, html_body):
     sender, password = _get_smtp()
     if not sender or not password:
-        st.warning("⚠️ Credenciales SMTP no configuradas en Secrets (smtp_email / smtp_password).")
+        st.warning("⚠️ Credenciales SMTP no configuradas en Secrets.")
         return False
     try:
         msg = MIMEMultipart("alternative")
@@ -31,7 +35,7 @@ def _send_email(to_email, subject, html_body):
             server.sendmail(sender, to_email, msg.as_string())
         return True
     except smtplib.SMTPAuthenticationError:
-        st.error(f"❌ Error de autenticación SMTP. Verifica smtp_email y smtp_password en Secrets.")
+        st.error("❌ Error de autenticación SMTP. Verifica smtp_email y smtp_password.")
         return False
     except smtplib.SMTPRecipientsRefused:
         st.warning(f"⚠️ Correo rechazado para: {to_email}")
@@ -42,7 +46,6 @@ def _send_email(to_email, subject, html_body):
 
 
 def test_email(to_email):
-    """Send a test email to verify SMTP configuration."""
     subject = "✅ Prueba de correo — IMEMSA Procesos Transversales"
     body = _base_template("Prueba Exitosa", f"""
     <p>Este es un correo de prueba del sistema de notificaciones.</p>
@@ -51,6 +54,72 @@ def test_email(to_email):
     """)
     return _send_email(to_email, subject, body)
 
+
+# ══════════════════════════════════════════════
+#  WHATSAPP (Twilio)
+# ══════════════════════════════════════════════
+
+def _get_twilio():
+    tw = st.secrets.get("twilio", {})
+    if isinstance(tw, dict) or hasattr(tw, "get"):
+        return (
+            tw.get("account_sid", ""),
+            tw.get("auth_token", ""),
+            tw.get("whatsapp_from", ""),
+        )
+    return "", "", ""
+
+
+def _send_whatsapp(to_phone, message):
+    account_sid, auth_token, wa_from = _get_twilio()
+    if not account_sid or not auth_token or not wa_from:
+        return False
+    try:
+        from twilio.rest import Client
+        client = Client(account_sid, auth_token)
+        # Ensure phone format
+        to_num = to_phone.strip().replace(" ", "")
+        if not to_num.startswith("+"):
+            # Default Mexico country code
+            to_num = "+52" + to_num if len(to_num) == 10 else "+" + to_num
+        wa_to = f"whatsapp:{to_num}"
+        wa_sender = f"whatsapp:{wa_from}" if not wa_from.startswith("whatsapp:") else wa_from
+
+        client.messages.create(
+            body=message,
+            from_=wa_sender,
+            to=wa_to
+        )
+        return True
+    except Exception as e:
+        st.warning(f"⚠️ Error WhatsApp a {to_phone}: {type(e).__name__}: {e}")
+        return False
+
+
+def test_whatsapp(to_phone):
+    message = (
+        "✅ *Prueba de WhatsApp — IMEMSA*\n\n"
+        "Este es un mensaje de prueba del sistema de notificaciones.\n"
+        "Si recibes este mensaje, WhatsApp está funcionando correctamente.\n\n"
+        f"🔗 {APP_URL}"
+    )
+    return _send_whatsapp(to_phone, message)
+
+
+# ══════════════════════════════════════════════
+#  DUAL NOTIFICATION (Email + WhatsApp)
+# ══════════════════════════════════════════════
+
+def _notify(email, phone, subject, html_body, wa_message):
+    """Send both email and WhatsApp."""
+    _send_email(email, subject, html_body)
+    if phone:
+        _send_whatsapp(phone, wa_message)
+
+
+# ══════════════════════════════════════════════
+#  EMAIL TEMPLATE
+# ══════════════════════════════════════════════
 
 def _base_template(title, body_html):
     return f"""
@@ -74,9 +143,13 @@ def _base_template(title, body_html):
     """
 
 
-def notify_task_activated(email, nombre, proceso, actividad, plazo_dias, fecha_limite):
+# ══════════════════════════════════════════════
+#  NOTIFICATION EVENTS
+# ══════════════════════════════════════════════
+
+def notify_task_activated(email, nombre, proceso, actividad, plazo_dias, fecha_limite, telefono=""):
     subject = f"📋 Nueva tarea asignada: {actividad}"
-    body = f"""
+    html = _base_template("Nueva Tarea Asignada", f"""
     <p>Hola <strong>{nombre}</strong>,</p>
     <p>Se te ha asignado una nueva tarea en el proceso <strong>{proceso}</strong>:</p>
     <div style="background:#f0f4fa;padding:15px;border-radius:8px;border-left:4px solid #0D2B6E;margin:15px 0;">
@@ -85,56 +158,80 @@ def notify_task_activated(email, nombre, proceso, actividad, plazo_dias, fecha_l
         <p style="margin:5px 0 0;"><strong>Fecha límite:</strong> {fecha_limite}</p>
     </div>
     <p>Por favor ingresa a la plataforma para dar seguimiento.</p>
-    """
-    return _send_email(email, subject, _base_template("Nueva Tarea Asignada", body))
+    """)
+    wa = (
+        f"📋 *Nueva tarea asignada*\n\n"
+        f"Hola {nombre},\n"
+        f"Tienes una nueva tarea en el proceso *{proceso}*:\n\n"
+        f"▶️ *{actividad}*\n"
+        f"⏱ Plazo: {plazo_dias} días hábiles\n"
+        f"📅 Límite: {fecha_limite}\n\n"
+        f"🔗 {APP_URL}"
+    )
+    _notify(email, telefono, subject, html, wa)
 
 
-def notify_reminder(email, nombre, actividad, dias_restantes, proceso):
+def notify_reminder(email, nombre, actividad, dias_restantes, proceso, telefono=""):
     subject = f"⚠️ Recordatorio: {actividad} - {dias_restantes} día(s) restante(s)"
-    body = f"""
+    html = _base_template("Recordatorio de Actividad", f"""
     <p>Hola <strong>{nombre}</strong>,</p>
     <p>Te recordamos que la actividad <strong>{actividad}</strong> del proceso
     <strong>{proceso}</strong> tiene <strong>{dias_restantes} día(s) hábil(es) restante(s)</strong>.</p>
     <p>Por favor complétala a la brevedad.</p>
-    """
-    return _send_email(email, subject, _base_template("Recordatorio de Actividad", body))
+    """)
+    wa = (
+        f"⚠️ *Recordatorio de actividad*\n\n"
+        f"Hola {nombre},\n"
+        f"Tu actividad *{actividad}* del proceso *{proceso}* "
+        f"tiene *{dias_restantes} día(s) restante(s)*.\n\n"
+        f"🔗 {APP_URL}"
+    )
+    _notify(email, telefono, subject, html, wa)
 
 
-def notify_overdue(email, nombre, actividad, proceso, dias_vencidos):
+def notify_overdue(email, nombre, actividad, proceso, dias_vencidos, telefono=""):
     subject = f"🔴 Actividad vencida: {actividad}"
-    body = f"""
+    html = _base_template("Actividad Vencida", f"""
     <p>Hola <strong>{nombre}</strong>,</p>
     <p>La actividad <strong>{actividad}</strong> del proceso <strong>{proceso}</strong>
     tiene <strong style="color:#C41E2E;">{dias_vencidos} día(s) de retraso</strong>.</p>
     <p>Se requiere atención inmediata.</p>
-    """
-    return _send_email(email, subject, _base_template("Actividad Vencida", body))
+    """)
+    wa = (
+        f"🔴 *Actividad vencida*\n\n"
+        f"Hola {nombre},\n"
+        f"Tu actividad *{actividad}* del proceso *{proceso}* "
+        f"tiene *{dias_vencidos} día(s) de retraso*.\n"
+        f"Se requiere atención inmediata.\n\n"
+        f"🔗 {APP_URL}"
+    )
+    _notify(email, telefono, subject, html, wa)
 
 
 def notify_task_completed(email_gerente, gerente, actividad, responsable, proceso):
     subject = f"✅ Actividad completada: {actividad}"
-    body = f"""
+    html = _base_template("Actividad Completada", f"""
     <p>Hola <strong>{gerente}</strong>,</p>
     <p>La actividad <strong>{actividad}</strong> del proceso <strong>{proceso}</strong>
     ha sido completada por <strong>{responsable}</strong>.</p>
-    """
-    return _send_email(email_gerente, subject, _base_template("Actividad Completada", body))
+    """)
+    _send_email(email_gerente, subject, html)
 
 
 def notify_process_completed(email, nombre, proceso, folio):
     subject = f"🎉 Proceso completado: {proceso}"
-    body = f"""
+    html = _base_template("Proceso Completado", f"""
     <p>Hola <strong>{nombre}</strong>,</p>
     <p>El proceso <strong>{proceso}</strong> (Folio: <strong>{folio}</strong>)
     ha sido completado exitosamente.</p>
     <p>Todas las actividades han sido finalizadas.</p>
-    """
-    return _send_email(email, subject, _base_template("Proceso Completado", body))
+    """)
+    _send_email(email, subject, html)
 
 
 def notify_confirmation_number(email, nombre, auth_id, proceso, vencimiento):
     subject = f"🔑 Número de confirmación: {auth_id}"
-    body = f"""
+    html = _base_template("Número de Confirmación", f"""
     <p>Hola <strong>{nombre}</strong>,</p>
     <p>Se ha generado tu número de confirmación para la plataforma:</p>
     <div style="background:#f0f4fa;padding:20px;border-radius:8px;text-align:center;margin:15px 0;">
@@ -143,8 +240,8 @@ def notify_confirmation_number(email, nombre, auth_id, proceso, vencimiento):
     <p><strong>Proceso:</strong> {proceso}</p>
     <p><strong>Vigencia:</strong> Hasta el {vencimiento}</p>
     <p>Utiliza este número al crear tu plantilla o lanzar una instancia en la plataforma.</p>
-    """
-    return _send_email(email, subject, _base_template("Número de Confirmación", body))
+    """)
+    _send_email(email, subject, html)
 
 
 def notify_welcome(email, nombre, proceso, actividad, password=""):
@@ -157,7 +254,7 @@ def notify_welcome(email, nombre, proceso, actividad, password=""):
             <p style="font-size:22px;font-weight:800;color:#0D2B6E;margin:5px 0;">{password}</p>
         </div>
         """
-    body = f"""
+    html = _base_template("Bienvenido a IMEMSA Procesos", f"""
     <p>Hola <strong>{nombre}</strong>,</p>
     <p>Has sido registrado(a) en la Plataforma de Procesos Transversales del Grupo IMEMSA.</p>
     <p>Tu primera tarea asignada es:</p>
@@ -170,5 +267,5 @@ def notify_welcome(email, nombre, proceso, actividad, password=""):
     con tu correo institucional: <strong>{email}</strong></p>
     {pwd_section}
     <p style="font-size:12px;color:#888;">Te recomendamos cambiar tu contraseña después del primer ingreso.</p>
-    """
-    return _send_email(email, subject, _base_template("Bienvenido a IMEMSA Procesos", body))
+    """)
+    _send_email(email, subject, html)
