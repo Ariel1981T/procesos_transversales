@@ -590,7 +590,8 @@ def complete_activity(task, inst):
         notif.notify_task_activated(
             next_task.get("Correo", ""), next_task.get("Responsable", ""),
             inst.get("Nombre_Instancia", ""), next_task.get("Actividad", ""),
-            dias_next, fecha_limite_next
+            dias_next, fecha_limite_next,
+            telefono=sm.get_user_phone(next_task.get("Correo", ""))
         )
 
     # Update instance progress
@@ -938,7 +939,8 @@ def launch_instance_form():
         f_limite_first = sm.add_business_days(now.date(), dias_first).strftime("%Y-%m-%d")
         notif.notify_task_activated(
             first.get("Correo", ""), first.get("Responsable", ""),
-            nombre_inst, first.get("Actividad", ""), dias_first, f_limite_first
+            nombre_inst, first.get("Actividad", ""), dias_first, f_limite_first,
+            telefono=str(first.get("Telefono", ""))
         )
 
         # Send welcome to new users
@@ -1491,7 +1493,7 @@ def pm_usuarios():
 def page_admin():
     st.markdown('<div class="section-header">⚙️ Administración del Sistema</div>', unsafe_allow_html=True)
 
-    tab1, tab2, tab3 = st.tabs(["📋 Log del Sistema", "📥 Plantilla Excel Modelo", "📧 Prueba de Correo"])
+    tab1, tab2, tab3, tab4 = st.tabs(["📋 Log del Sistema", "📥 Plantilla Excel", "📧 Prueba de Correo", "📱 Prueba WhatsApp"])
 
     with tab1:
         logs = sm.get_all_records(C.HOJA_LOG)
@@ -1515,9 +1517,31 @@ def page_admin():
         if test_submit and test_to:
             result = notif.test_email(test_to)
             if result:
-                st.success(f"✅ Correo de prueba enviado a {test_to}. Revisa tu bandeja de entrada.")
+                st.success(f"✅ Correo de prueba enviado a {test_to}.")
             else:
                 st.error("❌ No se pudo enviar el correo. Revisa los mensajes de error arriba.")
+
+    with tab4:
+        st.markdown("""
+        Envía un mensaje de WhatsApp de prueba para verificar la integración con Twilio.
+        """)
+        st.markdown("""
+        <div class="warning-box">
+            ⚠️ <strong>Sandbox de Twilio:</strong> Para que un número reciba mensajes, primero
+            debe enviar el código de activación al número del Sandbox.
+            Revisa las instrucciones en tu consola de Twilio.
+        </div>
+        """, unsafe_allow_html=True)
+        with st.form("test_wa_form"):
+            test_phone = st.text_input("📱 Número de teléfono (10 dígitos)",
+                                        placeholder="5512345678")
+            wa_submit = st.form_submit_button("📱 Enviar WhatsApp de prueba", type="primary")
+        if wa_submit and test_phone:
+            result = notif.test_whatsapp(test_phone)
+            if result:
+                st.success(f"✅ WhatsApp de prueba enviado a {test_phone}.")
+            else:
+                st.error("❌ No se pudo enviar. Revisa los mensajes de error arriba.")
 
 
 def generate_template_excel():
