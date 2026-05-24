@@ -966,7 +966,6 @@ def page_ver_instancia():
     inst_avances = [a for a in avances if a["ID_Instancia"] == inst_id]
     inst_avances.sort(key=lambda x: int(x.get("Numero_Actividad", 0)))
 
-    # Access control: Responsables can only view processes where they have tasks
     user = st.session_state.user
     rol = user.get("Rol", "Responsable")
     email = user.get("Correo", "").strip().lower()
@@ -978,7 +977,6 @@ def page_ver_instancia():
 
     evidencias = sm.get_all_records(C.HOJA_EVIDENCIAS)
     inst_evidencias = [e for e in evidencias if e["ID_Instancia"] == inst_id]
-
     comentarios = sm.get_all_records(C.HOJA_COMENTARIOS)
     inst_comentarios = [c for c in comentarios if c["ID_Instancia"] == inst_id]
 
@@ -988,64 +986,56 @@ def page_ver_instancia():
     except (ValueError, TypeError):
         pct = 0
     estatus = inst.get("Estatus", "En Proceso")
+    total = len(inst_avances)
+    completed_count = len([a for a in inst_avances if a.get("Estatus") == "Completada"])
+    overdue_count = len([a for a in inst_avances if a.get("Estatus") == "Activa"
+                         and sm.remaining_business_days(a.get("Fecha_Limite", "")) < 0])
+    at_risk_count = len([a for a in inst_avances if a.get("Estatus") == "Activa"
+                         and 0 <= sm.remaining_business_days(a.get("Fecha_Limite", "")) <= C.DIAS_ALERTA_AMARILLA])
+    on_time_count = len([a for a in inst_avances if a.get("Estatus") == "Activa"
+                         and sm.remaining_business_days(a.get("Fecha_Limite", "")) > C.DIAS_ALERTA_AMARILLA])
 
     # Back button
-    if st.button("← Regresar"):
-        st.session_state.selected_instance = None
-        st.session_state.page = "mis_procesos"
-        st.rerun()
+    col_back, _ = st.columns([1, 4])
+    with col_back:
+        if st.button("← Regresar", use_container_width=True):
+            st.session_state.selected_instance = None
+            st.session_state.page = "mis_procesos"
+            st.rerun()
 
-    # Instance header
-    st.markdown(f"""
-    <div class="instance-header">
-        <div style="display:flex;justify-content:space-between;align-items:flex-start;">
-            <div>
-                <div class="instance-folio">📋 {inst_id}</div>
-                <div style="font-size:1rem;color:#444;margin-top:0.3rem;">{inst.get('Nombre_Instancia','')}</div>
-                <div style="font-size:0.82rem;color:#888;margin-top:0.2rem;">
-                    {inst.get('Descripcion','')}
-                </div>
-            </div>
-            <div style="text-align:right;">
-                {badge(estatus)}
-                <div style="font-size:0.8rem;color:#888;margin-top:0.5rem;">
-                    Creado: {inst.get('Fecha_Creacion','')}<br>
-                    Est. fin: {inst.get('Fecha_Estimada_Fin','')}
-                </div>
-            </div>
-        </div>
-        {progress_bar(pct)}
-    </div>
-    """, unsafe_allow_html=True)
+    # ── Instance Header Card (Motores style) ──
+    st.markdown(
+        f'<div style="background:#fff;border-radius:12px;padding:20px 24px;'
+        f'margin-bottom:18px;box-shadow:0 1px 6px rgba(13,43,110,.10);border-top:4px solid #0D2B6E;">'
+        f'<div style="display:flex;justify-content:space-between;flex-wrap:wrap;gap:8px;">'
+        f'<div>'
+        f'  <div style="font-family:\'Barlow Condensed\',sans-serif;font-size:1.5rem;font-weight:800;color:#0D2B6E;">'
+        f'  📋 {inst_id}</div>'
+        f'  <div style="font-size:.85rem;color:#4B5563;margin-top:3px;">'
+        f'  {inst.get("Nombre_Instancia", "")} {" · " + inst.get("Descripcion", "") if inst.get("Descripcion") else ""}</div>'
+        f'</div>'
+        f'<div style="text-align:right;">{badge(estatus)}'
+        f'  <div style="font-size:.78rem;color:#8592A3;margin-top:4px;">Creado: {inst.get("Fecha_Creacion","")}</div>'
+        f'</div></div>'
+        f'<div style="margin-top:14px;">{progress_bar(pct)}</div>'
+        f'<div style="margin-top:10px;display:flex;gap:14px;flex-wrap:wrap;">'
+        f'  {sem_dot("green")}<span style="font-size:.8rem;">{on_time_count} en tiempo</span>'
+        f'  {sem_dot("yellow")}<span style="font-size:.8rem;">{at_risk_count} en riesgo</span>'
+        f'  {sem_dot("red")}<span style="font-size:.8rem;">{overdue_count} vencidas</span>'
+        f'</div></div>',
+        unsafe_allow_html=True,
+    )
 
-    # Metrics
-    total = len(inst_avances)
-    completed = len([a for a in inst_avances if a.get("Estatus") == "Completada"])
-    overdue = len([a for a in inst_avances if a.get("Estatus") in ["Activa", "Vencida"]
-                   and sm.remaining_business_days(a.get("Fecha_Limite", "")) < 0])
-    at_risk = len([a for a in inst_avances if a.get("Estatus") == "Activa"
-                   and 0 <= sm.remaining_business_days(a.get("Fecha_Limite", "")) <= C.DIAS_ALERTA_AMARILLA])
-    on_time = len([a for a in inst_avances if a.get("Estatus") == "Activa"
-                   and sm.remaining_business_days(a.get("Fecha_Limite", "")) > C.DIAS_ALERTA_AMARILLA])
+    # Export button
+    col_exp, _ = st.columns([1, 4])
+    with col_exp:
+        if st.button("⬇️  Exportar a Excel", use_container_width=True):
+            export_instance_to_excel(inst, inst_avances, inst_evidencias, inst_comentarios)
 
-    c1, c2, c3, c4, c5 = st.columns(5)
-    with c1:
-        st.markdown(metric_card(f"{completed}/{total}", "Completadas", "green"), unsafe_allow_html=True)
-    with c2:
-        st.markdown(metric_card(on_time, "En Tiempo"), unsafe_allow_html=True)
-    with c3:
-        st.markdown(metric_card(at_risk, "En Riesgo", "yellow"), unsafe_allow_html=True)
-    with c4:
-        st.markdown(metric_card(overdue, "Vencidas", "red"), unsafe_allow_html=True)
-    with c5:
-        if inst.get("Unidades"):
-            st.markdown(metric_card(inst.get("Unidades", ""), "Unidades"), unsafe_allow_html=True)
-        if inst.get("Importe"):
-            st.markdown(metric_card(f"${float(inst.get('Importe',0)):,.2f}", "Importe"), unsafe_allow_html=True)
+    st.markdown(f'<div class="section-header">🔢 Actividades del Proceso ({total})</div>',
+                unsafe_allow_html=True)
 
-    # Activities grouped by phase
-    st.markdown('<div class="section-header">🔢 Actividades del Proceso</div>', unsafe_allow_html=True)
-
+    # ── Activities grouped by phase ──
     current_phase = ""
     for act in inst_avances:
         phase = act.get("Fase", "")
@@ -1053,83 +1043,143 @@ def page_ver_instancia():
             current_phase = phase
             phase_acts = [a for a in inst_avances if a.get("Fase") == phase]
             phase_done = len([a for a in phase_acts if a.get("Estatus") == "Completada"])
-            st.markdown(f'<div class="phase-header">📂 {phase} ({phase_done}/{len(phase_acts)} completadas)</div>',
-                        unsafe_allow_html=True)
+            st.markdown(
+                f'<div style="margin:18px 0 8px;display:flex;align-items:center;gap:8px;">'
+                f'<span style="font-family:\'Barlow Condensed\',sans-serif;font-size:1.1rem;'
+                f'font-weight:700;color:#0D2B6E;">{phase}</span>'
+                f'<span style="font-size:.72rem;color:#8592A3;">({phase_done}/{len(phase_acts)} completadas)</span>'
+                f'</div>',
+                unsafe_allow_html=True,
+            )
 
-        estatus_act = act.get("Estatus", "Pendiente")
-        remaining = sm.remaining_business_days(act.get("Fecha_Limite", "")) if act.get("Fecha_Limite") else None
+        _render_activity_row(act, inst, inst_evidencias, inst_comentarios, user)
 
-        if estatus_act == "Completada":
-            css_class = "completada"
-            badge_html = badge("Completada", "completada")
-        elif estatus_act == "Activa" and remaining is not None and remaining < 0:
-            css_class = "vencida"
-            badge_html = badge("Vencida", "vencida")
-        elif estatus_act == "Activa" and remaining is not None and remaining <= C.DIAS_ALERTA_AMARILLA:
-            css_class = "en-riesgo"
-            badge_html = badge(f"⚠️ {remaining}d", "en-riesgo")
-        elif estatus_act == "Activa":
-            css_class = "activa"
-            badge_html = badge(f"🟢 {remaining}d", "activa")
-        else:
-            css_class = "pendiente"
-            badge_html = badge("Pendiente", "pendiente")
 
-        # Dates info
-        dates_html = ""
-        if act.get("Fecha_Inicio"):
-            dates_html += f"Inicio: {act['Fecha_Inicio']}"
-        if act.get("Fecha_Limite"):
-            dates_html += f" · Límite: {act['Fecha_Limite']}"
-        if act.get("Fecha_Cierre"):
-            dates_html += f" · Cierre: {act['Fecha_Cierre']}"
+def _render_activity_row(act, inst, inst_evidencias, inst_comentarios, user):
+    """Render a single activity row with Motores-style design."""
+    inst_id = inst.get("ID_Instancia", "")
+    estatus_act = act.get("Estatus", "Pendiente")
+    remaining = sm.remaining_business_days(act.get("Fecha_Limite", "")) if act.get("Fecha_Limite") else None
+    act_num = act.get("Numero_Actividad", "")
+    responsable = act.get("Responsable", "")
 
-        # Evidence
-        act_evidencias = [e for e in inst_evidencias if str(e.get("Numero_Actividad")) == str(act.get("Numero_Actividad"))]
-        ev_html = ""
+    # Determine row class and semaphore
+    if estatus_act == "Completada":
+        row_cls = "act-row-completada"
+        sem = "green"
+        status_label = "✅ Completada"
+    elif estatus_act == "Activa" and remaining is not None and remaining < 0:
+        row_cls = "act-row-vencida"
+        sem = "red"
+        status_label = "Vencida"
+    elif estatus_act == "Activa" and remaining is not None and remaining <= C.DIAS_ALERTA_AMARILLA:
+        row_cls = "act-row-en-riesgo"
+        sem = "yellow"
+        status_label = "En Riesgo"
+    elif estatus_act == "Activa":
+        row_cls = "act-row-activa"
+        sem = "green"
+        status_label = "En Proceso"
+    else:
+        row_cls = "act-row-pendiente"
+        sem = "gray"
+        status_label = "Pendiente"
+
+    days_html = days_badge(remaining) if estatus_act in ("Activa",) else ""
+
+    # Dates
+    dates_parts = []
+    dates_parts.append(f"Plazo: {act.get('Dias_Teoricos', '')} días hábiles")
+    if act.get("Fecha_Inicio"):
+        dates_parts.append(f"Inicio: {act['Fecha_Inicio']}")
+    if act.get("Fecha_Limite"):
+        dates_parts.append(f"Límite: {act['Fecha_Limite']}")
+    if act.get("Fecha_Cierre"):
+        dates_parts.append(f"Cierre: {act['Fecha_Cierre']}")
+
+    # Evidence indicator
+    act_evidencias = [e for e in inst_evidencias
+                      if str(e.get("Numero_Actividad")) == str(act_num)]
+    ev_line = ""
+    if act_evidencias:
+        ev_names = ", ".join([e.get("Nombre_Archivo", "") for e in act_evidencias])
+        ev_line = f'<div style="margin-top:4px;font-size:.75rem;color:#6B7280;">📎 Evidencia: {ev_names}</div>'
+
+    st.markdown(
+        f'<div class="act-row {row_cls}">'
+        f'<div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;">'
+        f'  <div style="display:flex;align-items:center;gap:8px;">'
+        f'    <span style="font-family:\'Barlow Condensed\',sans-serif;font-size:.85rem;'
+        f'    font-weight:700;color:#8592A3;min-width:22px;">{int(act_num):02d}</span>'
+        f'    {sem_dot(sem)}'
+        f'    <div><div class="act-name">{act.get("Actividad", "")}</div></div>'
+        f'  </div>'
+        f'  <div style="text-align:right;">'
+        f'    <span style="font-size:.75rem;padding:3px 10px;border-radius:20px;'
+        f'    background:#F3F4F6;color:#374151;font-weight:600;">{status_label}</span>'
+        f'    <div class="act-meta" style="margin-top:4px;">'
+        f'    Resp: {avatar(responsable, 32)}'
+        f'    {responsable}</div>'
+        f'  </div>'
+        f'</div>'
+        f'<div class="act-meta" style="margin-top:6px;">'
+        f'  {"  ·  ".join(dates_parts)}  {days_html}'
+        f'</div>'
+        f'{ev_line}'
+        f'</div>',
+        unsafe_allow_html=True,
+    )
+
+    # ── Evidence Expander ──
+    ev_label = f"📸  Evidencias  ({len(act_evidencias)})" if act_evidencias else "📸  Evidencias"
+    with st.expander(ev_label, expanded=False):
         if act_evidencias:
-            ev_html = "📎 " + ", ".join([f"<a href='{e.get('URL_Cloudinary','')}' target='_blank'>{e.get('Nombre_Archivo','')}</a>"
-                                          for e in act_evidencias])
+            for ev in act_evidencias:
+                url = ev.get("URL_Cloudinary", "")
+                name = ev.get("Nombre_Archivo", "archivo")
+                subido = ev.get("Subido_Por", "")
+                fecha = ev.get("Fecha_Subida", "")
+                st.markdown(
+                    f'<div style="padding:6px 10px;border-left:3px solid #0D2B6E;'
+                    f'margin-bottom:6px;background:#F8FAFF;border-radius:0 6px 6px 0;">'
+                    f'<a href="{url}" target="_blank" style="font-size:.85rem;font-weight:600;color:#0D2B6E;">📄 {name}</a>'
+                    f'<span style="font-size:.72rem;color:#6B7280;margin-left:8px;">'
+                    f'Subido por {subido} · {fecha}</span></div>',
+                    unsafe_allow_html=True,
+                )
+        else:
+            st.caption("Sin evidencias adjuntas.")
 
-        # Build card HTML as compact string to avoid Streamlit rendering issues
-        ev_info = f" · {ev_html}" if ev_html else ""
-        card_html = (
-            f'<div class="activity-card {css_class}">'
-            f'<div class="activity-header">'
-            f'<div style="display:flex;align-items:center;">'
-            f'<span class="activity-num">{act.get("Numero_Actividad","")}</span>'
-            f'<div>'
-            f'<span class="activity-title">{act.get("Actividad","")}</span>'
-            f'<div class="activity-desc">'
-            f'{avatar(act.get("Responsable",""))} {act.get("Responsable","")}'
-            f' &middot; Plazo: {act.get("Dias_Teoricos","")}d'
-            f'</div></div></div>'
-            f'<div>{badge_html}</div>'
-            f'</div>'
-            f'<div style="font-size:0.78rem;color:#888;margin-top:0.3rem;">'
-            f'{dates_html}{ev_info}'
-            f'</div></div>'
-        )
-        st.markdown(card_html, unsafe_allow_html=True)
-
-    # Comments section
-    if inst_comentarios:
-        st.markdown('<div class="section-header">💬 Comentarios</div>', unsafe_allow_html=True)
-        for com in inst_comentarios:
-            st.markdown(f"""
-            <div style="background:#f8f9fa;padding:0.6rem 1rem;border-radius:8px;margin-bottom:0.5rem;font-size:0.85rem;">
-                {avatar(com.get('Autor',''), 24)}
-                <strong>{com.get('Autor','')}</strong>
-                <span style="color:#888;margin-left:0.5rem;">{com.get('Fecha','')}</span>
-                <span style="color:#888;"> · Act #{com.get('Numero_Actividad','')}</span>
-                <div style="margin-top:0.3rem;margin-left:2rem;">{com.get('Texto','')}</div>
-            </div>
-            """, unsafe_allow_html=True)
-
-    # Export button
-    st.markdown("---")
-    if st.button("📥 Exportar a Excel"):
-        export_instance_to_excel(inst, inst_avances, inst_evidencias, inst_comentarios)
+    # ── Comments Expander ──
+    act_comments = [c for c in inst_comentarios
+                    if str(c.get("Numero_Actividad")) == str(act_num)]
+    com_label = f"💬  Comentarios  ({len(act_comments)})" if act_comments else "💬  Agregar comentario"
+    with st.expander(com_label, expanded=False):
+        for cm in act_comments:
+            st.markdown(
+                f'<div style="padding:6px 10px;border-left:3px solid #C41E2E;'
+                f'margin-bottom:6px;background:#FFF8F8;border-radius:0 6px 6px 0;">'
+                f'<span style="font-size:.72rem;color:#6B7280;">{cm.get("Fecha","")}</span>  '
+                f'<strong style="font-size:.80rem;color:#C41E2E;">{cm.get("Autor","")}</strong><br>'
+                f'<span style="font-size:.82rem;color:#374151;">{cm.get("Texto","")}</span></div>',
+                unsafe_allow_html=True,
+            )
+        with st.form(f"comment_form_{inst_id}_{act_num}"):
+            new_comment = st.text_area("Nuevo comentario", height=70, label_visibility="collapsed",
+                                       placeholder="Escribe un comentario sobre esta actividad…")
+            if st.form_submit_button("➕  Agregar comentario", use_container_width=True):
+                if new_comment.strip():
+                    com_id = f"COM-{datetime.now().strftime('%Y%m%d%H%M%S')}-{act_num}"
+                    sm.append_row(C.HOJA_COMENTARIOS, [
+                        com_id, inst_id, act_num, user.get("Nombre", ""),
+                        datetime.now().strftime("%Y-%m-%d %H:%M:%S"), new_comment.strip()
+                    ])
+                    sm.log_action(user["Nombre"], "Comentario", "Actividad",
+                                  act.get("ID_Avance", ""), new_comment.strip()[:80])
+                    st.success("💬 Comentario agregado.")
+                    st.rerun()
+                else:
+                    st.warning("El comentario no puede estar vacío.")
 
 
 def export_instance_to_excel(inst, avances, evidencias, comentarios):
