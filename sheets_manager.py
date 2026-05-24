@@ -1,168 +1,124 @@
 """
-Gestión de datos en Google Sheets para la Plataforma de Procesos Transversales
-Versión optimizada con caché agresivo para evitar rate limiting de Google API.
+Gestión de datos con Supabase para la Plataforma de Procesos Transversales.
+Reemplaza Google Sheets con PostgreSQL via Supabase REST API.
 """
-import gspread
-from google.oauth2.service_account import Credentials
 import streamlit as st
 from datetime import datetime, timedelta
-import json
-import time
+from supabase import create_client
 import config as C
 
-SCOPES = [
-    "https://www.googleapis.com/auth/spreadsheets",
-    "https://www.googleapis.com/auth/drive",
-]
+# ── Table name mapping ──
+TABLE_MAP = {
+    C.HOJA_USUARIOS: "usuarios",
+    C.HOJA_AUTORIZACIONES: "autorizaciones",
+    C.HOJA_PLANTILLAS: "plantillas",
+    C.HOJA_ACTIVIDADES_PLANTILLA: "actividades_plantilla",
+    C.HOJA_INSTANCIAS: "instancias",
+    C.HOJA_AVANCE: "avance_instancia",
+    C.HOJA_EVIDENCIAS: "evidencias",
+    C.HOJA_COMENTARIOS: "comentarios",
+    C.HOJA_LOG: "log_sistema",
+}
+
+# ── Column name mapping (Google Sheets names -> Supabase column names) ──
+COL_MAP = {
+    "ID_Usuario": "id_usuario", "Nombre": "nombre", "Correo": "correo",
+    "Telefono": "telefono", "Area": "area", "Rol": "rol", "Activo": "activo",
+    "ID_Autorizacion": "id_autorizacion", "Tipo": "tipo", "Solicitante": "solicitante",
+    "Nombre_Proceso": "nombre_proceso", "PM_Emisor": "pm_emisor",
+    "Fecha_Emision": "fecha_emision", "Fecha_Vencimiento": "fecha_vencimiento",
+    "Estatus": "estatus", "ID_Vinculado": "id_vinculado", "Fecha_Consumo": "fecha_consumo",
+    "ID_Plantilla": "id_plantilla", "Descripcion": "descripcion",
+    "Area_Origen": "area_origen", "Gerente_Creador": "gerente_creador",
+    "Fecha_Creacion": "fecha_creacion", "Version": "version",
+    "Num_Actividades": "num_actividades", "Num_Fases": "num_fases",
+    "Veces_Utilizada": "veces_utilizada", "Dias_Teoricos_Total": "dias_teoricos_total",
+    "ID_Actividad_TPL": "id_actividad_tpl", "Numero": "numero", "Fase": "fase",
+    "Actividad": "actividad", "Responsable": "responsable",
+    "Dias_Teoricos": "dias_teoricos", "Evidencia_Requerida": "evidencia_requerida",
+    "ID_Instancia": "id_instancia", "Nombre_Instancia": "nombre_instancia",
+    "Gerente_Responsable": "gerente_responsable", "Fecha_Estimada_Fin": "fecha_estimada_fin",
+    "Fecha_Real_Fin": "fecha_real_fin", "Porcentaje_Avance": "porcentaje_avance",
+    "Unidades": "unidades", "Importe": "importe",
+    "ID_Avance": "id_avance", "Numero_Actividad": "numero_actividad",
+    "Fecha_Inicio": "fecha_inicio", "Fecha_Limite": "fecha_limite",
+    "Fecha_Cierre": "fecha_cierre", "Dias_Reales": "dias_reales",
+    "Desviacion": "desviacion", "Tiene_Evidencia": "tiene_evidencia",
+    "ID_Evidencia": "id_evidencia", "Nombre_Archivo": "nombre_archivo",
+    "URL_Cloudinary": "url_cloudinary", "Public_ID": "public_id",
+    "Fecha_Subida": "fecha_subida", "Subido_Por": "subido_por",
+    "ID_Comentario": "id_comentario", "Autor": "autor", "Fecha": "fecha", "Texto": "texto",
+    "ID_Log": "id_log", "Fecha_Hora": "fecha_hora", "Usuario": "usuario",
+    "Accion": "accion", "Entidad": "entidad", "ID_Entidad": "id_entidad",
+    "Detalle": "detalle",
+}
+
+# Reverse mapping: supabase column -> Google Sheets name
+REV_COL_MAP = {v: k for k, v in COL_MAP.items()}
 
 
 @st.cache_resource(ttl=600)
 def get_client():
-    raw = st.secrets["gcp_service_account"]
-    if isinstance(raw, str):
-        creds_dict = json.loads(raw)
-    else:
-        creds_dict = dict(raw)
-    creds = Credentials.from_service_account_info(creds_dict, scopes=SCOPES)
-    return gspread.authorize(creds)
+    url = st.secrets["supabase_url"]
+    key = st.secrets["supabase_key"]
+    return create_client(url, key)
 
 
-@st.cache_resource(ttl=600)
-def _get_spreadsheet():
-    client = get_client()
-    return client.open_by_key(st.secrets["spreadsheet_id"])
+def _table(sheet_name):
+    return TABLE_MAP.get(sheet_name, sheet_name)
 
 
-@st.cache_resource(ttl=600)
-def _get_ws(name):
-    """Cache worksheet references to avoid repeated API calls."""
-    ss = _get_spreadsheet()
-    try:
-        return ss.worksheet(name)
-    except gspread.exceptions.WorksheetNotFound:
-        ws = ss.add_worksheet(title=name, rows=1000, cols=20)
-        headers = C.HEADERS.get(name, [])
-        if headers:
-            ws.update("A1", [headers])
-        return ws
+def _to_db_cols(data_dict):
+    """Convert app-level column names to database column names."""
+    return {COL_MAP.get(k, k.lower()): v for k, v in data_dict.items()}
 
 
-def _retry(func, max_retries=4, base_delay=3):
-    """Execute with retry and exponential backoff for 429 errors."""
-    for attempt in range(max_retries):
-        try:
-            return func()
-        except gspread.exceptions.APIError as e:
-            error_code = getattr(e, 'response', None)
-            status = error_code.status_code if error_code else 0
-            if attempt < max_retries - 1:
-                if status == 429:
-                    wait = 10 * (attempt + 1)  # 10, 20, 30 seconds for rate limit
-                else:
-                    wait = base_delay * (2 ** attempt)
-                time.sleep(wait)
-            else:
-                raise e
-        except Exception as e:
-            if attempt < max_retries - 1:
-                time.sleep(base_delay)
-            else:
-                raise e
-
-
-# ── In-memory cache for sheet data ──
-if "_sheets_cache" not in st.session_state:
-    st.session_state._sheets_cache = {}
-if "_sheets_cache_time" not in st.session_state:
-    st.session_state._sheets_cache_time = {}
-
-CACHE_TTL = 30  # seconds
+def _to_app_cols(row):
+    """Convert database column names back to app-level names."""
+    return {REV_COL_MAP.get(k, k): v for k, v in row.items()}
 
 
 def get_all_records(sheet_name):
-    """Read all records with in-memory session cache."""
-    cache = st.session_state._sheets_cache
-    cache_time = st.session_state._sheets_cache_time
-    now = time.time()
-
-    # Return cached if fresh
-    if sheet_name in cache and sheet_name in cache_time:
-        if now - cache_time[sheet_name] < CACHE_TTL:
-            return cache[sheet_name]
-
-    # Fetch from API with retry
-    def _do():
-        ws = _get_ws(sheet_name)
-        return ws.get_all_records()
-
-    data = _retry(_do)
-    cache[sheet_name] = data
-    cache_time[sheet_name] = now
-    return data
-
-
-def _invalidate(sheet_name):
-    """Mark a specific sheet cache as stale."""
-    if sheet_name in st.session_state._sheets_cache_time:
-        st.session_state._sheets_cache_time[sheet_name] = 0
-
-
-def _invalidate_all():
-    """Mark all caches as stale."""
-    st.session_state._sheets_cache_time = {}
+    """Fetch all records from a table."""
+    client = get_client()
+    table = _table(sheet_name)
+    response = client.table(table).select("*").execute()
+    return [_to_app_cols(row) for row in response.data]
 
 
 def append_row(sheet_name, row_data):
-    def _do():
-        ws = _get_ws(sheet_name)
-        ws.append_row(row_data, value_input_option="USER_ENTERED")
-    _retry(_do)
-    _invalidate(sheet_name)
+    """Insert a new row into a table."""
+    client = get_client()
+    table = _table(sheet_name)
+    headers = C.HEADERS.get(sheet_name, [])
+    if not headers or len(row_data) != len(headers):
+        return
+    record = {}
+    for i, header in enumerate(headers):
+        col = COL_MAP.get(header, header.lower())
+        val = row_data[i] if i < len(row_data) else ""
+        record[col] = val
+    client.table(table).insert(record).execute()
 
 
 def update_cell_by_id(sheet_name, id_column, id_value, target_column, new_value):
-    def _do():
-        ws = _get_ws(sheet_name)
-        records = ws.get_all_values()
-        if not records:
-            return False
-        headers = records[0]
-        id_col_idx = headers.index(id_column) if id_column in headers else -1
-        tgt_col_idx = headers.index(target_column) if target_column in headers else -1
-        if id_col_idx < 0 or tgt_col_idx < 0:
-            return False
-        for i, row in enumerate(records[1:], start=2):
-            if row[id_col_idx] == str(id_value):
-                ws.update_cell(i, tgt_col_idx + 1, new_value)
-                return True
-        return False
-    result = _retry(_do)
-    _invalidate(sheet_name)
-    return result
+    """Update a single cell identified by ID."""
+    client = get_client()
+    table = _table(sheet_name)
+    db_id_col = COL_MAP.get(id_column, id_column.lower())
+    db_tgt_col = COL_MAP.get(target_column, target_column.lower())
+    client.table(table).update({db_tgt_col: new_value}).eq(db_id_col, str(id_value)).execute()
+    return True
 
 
 def update_row_by_id(sheet_name, id_column, id_value, updates_dict):
-    def _do():
-        ws = _get_ws(sheet_name)
-        records = ws.get_all_values()
-        if not records:
-            return False
-        headers = records[0]
-        id_col_idx = headers.index(id_column) if id_column in headers else -1
-        if id_col_idx < 0:
-            return False
-        for i, row in enumerate(records[1:], start=2):
-            if row[id_col_idx] == str(id_value):
-                # Batch update: build range and values
-                for col_name, value in updates_dict.items():
-                    if col_name in headers:
-                        col_idx = headers.index(col_name)
-                        ws.update_cell(i, col_idx + 1, str(value))
-                return True
-        return False
-    result = _retry(_do)
-    _invalidate(sheet_name)
-    return result
+    """Update multiple fields in a row identified by ID."""
+    client = get_client()
+    table = _table(sheet_name)
+    db_id_col = COL_MAP.get(id_column, id_column.lower())
+    db_updates = _to_db_cols(updates_dict)
+    client.table(table).update(db_updates).eq(db_id_col, str(id_value)).execute()
+    return True
 
 
 def get_next_id(prefix, sheet_name, id_column):
@@ -188,9 +144,9 @@ def get_next_auth_id():
     nums = []
     for r in records:
         aid = r.get("ID_Autorizacion", "")
-        if aid.startswith(prefix):
+        if str(aid).startswith(prefix):
             try:
-                nums.append(int(aid.split("-")[-1]))
+                nums.append(int(str(aid).split("-")[-1]))
             except ValueError:
                 continue
     next_num = max(nums) + 1 if nums else 1
@@ -204,9 +160,9 @@ def get_next_instance_id():
     nums = []
     for r in records:
         iid = r.get("ID_Instancia", "")
-        if iid.startswith(prefix):
+        if str(iid).startswith(prefix):
             try:
-                nums.append(int(iid.split("-")[-1]))
+                nums.append(int(str(iid).split("-")[-1]))
             except ValueError:
                 continue
     next_num = max(nums) + 1 if nums else 1
@@ -246,15 +202,18 @@ def remaining_business_days(deadline):
     return business_days_between(today, deadline)
 
 
-# ── Initialize spreadsheet ──
+# ── Initialize (no-op for Supabase, tables created via SQL) ──
 def init_spreadsheet():
-    for sheet_name in C.HEADERS:
-        _get_ws(sheet_name)
-        time.sleep(2)
+    pass
 
 
 # ── User management ──
 def find_user_by_email(email):
+    client = get_client()
+    response = client.table("usuarios").select("*").eq("correo", email.strip().lower()).execute()
+    if response.data:
+        return _to_app_cols(response.data[0])
+    # Try case-insensitive search
     users = get_all_records(C.HOJA_USUARIOS)
     for u in users:
         if u.get("Correo", "").strip().lower() == email.strip().lower():
@@ -271,11 +230,13 @@ def auto_register_users(activities_df):
     existing_emails = {u["Correo"].strip().lower() for u in existing_users}
     new_users = []
     discrepancies = []
+    seen_emails = set()
 
     for _, row in activities_df.iterrows():
         email = str(row.get("Correo", "")).strip().lower()
-        if not email or email in [e.strip().lower() for e in [u["Correo"] for u in new_users if "Correo" in u]]:
+        if not email or email in seen_emails:
             continue
+        seen_emails.add(email)
 
         if email in existing_emails:
             existing = next(u for u in existing_users if u["Correo"].strip().lower() == email)
@@ -301,16 +262,15 @@ def auto_register_users(activities_df):
                 append_row(C.HOJA_USUARIOS, list(new_user.values()))
                 new_users.append(new_user)
                 existing_emails.add(email)
-                time.sleep(1)
 
     return new_users, discrepancies
 
 
-# ── Log (non-blocking) ──
+# ── Log ──
 def log_action(usuario, accion, entidad, id_entidad, detalle=""):
     try:
         now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         log_id = f"LOG-{datetime.now().strftime('%Y%m%d%H%M%S')}"
         append_row(C.HOJA_LOG, [log_id, now, usuario, accion, entidad, id_entidad, detalle])
     except Exception:
-        pass  # Log errors should never break the app
+        pass
