@@ -127,8 +127,16 @@ def notify_confirmation_number(email, nombre, auth_id, proceso, vencimiento):
     return _send_email(email, subject, _base_template("Número de Confirmación", body))
 
 
-def notify_welcome(email, nombre, proceso, actividad):
+def notify_welcome(email, nombre, proceso, actividad, password=""):
     subject = "🎉 Bienvenido a la Plataforma de Procesos Transversales IMEMSA"
+    pwd_section = ""
+    if password:
+        pwd_section = f"""
+        <div style="background:#f0f4fa;padding:15px;border-radius:8px;text-align:center;margin:15px 0;">
+            <p style="margin:0;font-size:12px;color:#666;">Tu contraseña de acceso:</p>
+            <p style="font-size:22px;font-weight:800;color:#0D2B6E;margin:5px 0;">{password}</p>
+        </div>
+        """
     body = f"""
     <p>Hola <strong>{nombre}</strong>,</p>
     <p>Has sido registrado(a) en la Plataforma de Procesos Transversales del Grupo IMEMSA.</p>
@@ -140,5 +148,7 @@ def notify_welcome(email, nombre, proceso, actividad):
     <p><strong>¿Cómo acceder?</strong></p>
     <p>Ingresa a <a href="{APP_URL}" style="color:#0D2B6E;font-weight:bold;">{APP_URL}</a>
     con tu correo institucional: <strong>{email}</strong></p>
+    {pwd_section}
+    <p style="font-size:12px;color:#888;">Te recomendamos cambiar tu contraseña después del primer ingreso.</p>
     """
     return _send_email(email, subject, _base_template("Bienvenido a IMEMSA Procesos", body))
