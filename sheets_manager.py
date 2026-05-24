@@ -223,18 +223,11 @@ def find_user_by_email(email):
     response = client.table("usuarios").select("*").eq("correo", email.strip().lower()).execute()
     if response.data:
         return _to_app_cols(response.data[0])
-    # Try case-insensitive search
     users = get_all_records(C.HOJA_USUARIOS)
     for u in users:
         if u.get("Correo", "").strip().lower() == email.strip().lower():
             return u
     return None
-
-
-def get_user_phone(email):
-    """Get phone number for a user by email."""
-    user = find_user_by_email(email)
-    return str(user.get("Telefono", "")) if user else ""
 
 
 def validate_domain(email):
