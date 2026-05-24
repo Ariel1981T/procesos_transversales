@@ -793,7 +793,6 @@ def launch_instance_form():
     st.markdown(f'<div class="section-header">🚀 Lanzar Instancia de: {tpl.get("Nombre", "")}</div>',
                 unsafe_allow_html=True)
 
-    # Show template summary
     st.markdown(f"""
     <div class="info-box">
         📋 <strong>Plantilla:</strong> {tpl.get('Nombre', '')} (v{tpl.get('Version', 1)})<br>
@@ -804,87 +803,148 @@ def launch_instance_form():
     </div>
     """, unsafe_allow_html=True)
 
+    # Load template activities
+    all_acts = sm.get_all_records(C.HOJA_ACTIVIDADES_PLANTILLA)
+    tpl_acts = [a for a in all_acts if a["ID_Plantilla"] == tpl_id]
+    tpl_acts.sort(key=lambda x: int(x.get("Numero", 0)))
+
+    if not tpl_acts:
+        st.error("La plantilla no tiene actividades definidas.")
+        return
+
     st.markdown("""
     <div class="warning-box">
-        ⏱ <strong>Importante:</strong> Al dar clic en <em>Lanzar Proceso</em>, el sistema activará
-        la primera actividad y comenzará a contabilizar los días hábiles asignados.
-        Se notificará al responsable de la primera tarea por correo electrónico.
+        👥 <strong>Revisa y ajusta los responsables.</strong> Los campos de Actividad, Fase, Días y Descripción
+        no se pueden modificar. Puedes cambiar el <strong>Responsable, Correo y Teléfono</strong> de cada actividad
+        si necesitas asignar personas diferentes para esta ejecución.<br><br>
+        ⏱ Al dar clic en <em>Confirmar y Lanzar</em>, el sistema activará la primera actividad
+        y comenzará a contabilizar los días hábiles.
     </div>
     """, unsafe_allow_html=True)
 
-    col1, col2 = st.columns(2)
-    with col1:
-        if st.button("🚀 Lanzar Proceso", type="primary", use_container_width=True):
-            # Get template activities
-            all_acts = sm.get_all_records(C.HOJA_ACTIVIDADES_PLANTILLA)
-            tpl_acts = [a for a in all_acts if a["ID_Plantilla"] == tpl_id]
-            tpl_acts.sort(key=lambda x: int(x.get("Numero", 0)))
+    with st.form("launch_with_responsables"):
+        edited_acts = []
+        for act in tpl_acts:
+            num = int(act.get("Numero", 0))
+            ev_req = str(act.get("Evidencia_Requerida", "")).lower() in ["sí", "si", "yes", "true", "1"]
+            st.markdown(
+                f'<div class="act-row act-row-pendiente" style="margin-bottom:4px;">'
+                f'<div style="display:flex;align-items:center;gap:8px;">'
+                f'<span style="font-family:\'Barlow Condensed\',sans-serif;font-size:.85rem;'
+                f'font-weight:700;color:#8592A3;min-width:22px;">{num:02d}</span>'
+                f'<div>'
+                f'<div class="act-name">{act.get("Actividad", "")}</div>'
+                f'<div class="act-meta">{act.get("Fase", "")} · {act.get("Dias_Teoricos", "")} días hábiles'
+                f'{"  ·  📎 Evidencia requerida" if ev_req else ""}'
+                f'</div></div></div></div>',
+                unsafe_allow_html=True,
+            )
+            c1, c2, c3 = st.columns(3)
+            resp = c1.text_input("Responsable", value=act.get("Responsable", ""),
+                                  key=f"resp_{tpl_id}_{num}")
+            correo = c2.text_input("Correo", value=act.get("Correo", ""),
+                                    key=f"correo_{tpl_id}_{num}")
+            tel = c3.text_input("Teléfono", value=str(act.get("Telefono", "")),
+                                 key=f"tel_{tpl_id}_{num}")
+            edited_acts.append({
+                **act,
+                "Responsable": resp,
+                "Correo": correo,
+                "Telefono": tel,
+            })
+            st.markdown("---")
 
-            if not tpl_acts:
-                st.error("La plantilla no tiene actividades definidas.")
-                return
+        col1, col2 = st.columns(2)
+        submit = col1.form_submit_button("🚀 Confirmar y Lanzar", type="primary",
+                                          use_container_width=True)
+        cancel = col2.form_submit_button("❌ Cancelar", use_container_width=True)
 
-            # Create instance
-            user = st.session_state.user
-            inst_id = sm.get_next_instance_id()
-            now = datetime.now()
-            dias_total = int(tpl.get("Dias_Teoricos_Total", 0))
-            fecha_est_fin = sm.add_business_days(now.date(), dias_total).strftime("%Y-%m-%d")
-            nombre_inst = tpl.get("Nombre", "")
+    if cancel:
+        st.session_state.show_launch = False
+        st.session_state.selected_template = None
+        st.rerun()
 
-            sm.append_row(C.HOJA_INSTANCIAS, [
-                inst_id, tpl_id, nombre_inst, "", user.get("Nombre", ""),
-                now.strftime("%Y-%m-%d"), fecha_est_fin, "", "En Proceso", 0,
-                tpl.get("ID_Autorizacion", "Plantilla aprobada"), "", ""
+    if submit:
+        # Validate emails
+        errors = []
+        for ea in edited_acts:
+            if not ea.get("Responsable", "").strip():
+                errors.append(f"Act {ea.get('Numero','')}: Responsable vacío")
+            if "@" not in str(ea.get("Correo", "")):
+                errors.append(f"Act {ea.get('Numero','')}: Correo inválido")
+            elif not sm.validate_domain(ea.get("Correo", "")):
+                errors.append(f"Act {ea.get('Numero','')}: Dominio no autorizado ({ea.get('Correo','')})")
+        if errors:
+            st.error("❌ Errores:\n" + "\n".join(errors[:10]))
+            return
+
+        # Auto-register new users
+        df_users = pd.DataFrame(edited_acts)
+        new_users, _ = sm.auto_register_users(df_users)
+        if new_users:
+            st.info(f"👥 {len(new_users)} usuario(s) nuevo(s) registrado(s).")
+
+        # Create instance
+        user = st.session_state.user
+        inst_id = sm.get_next_instance_id()
+        now = datetime.now()
+        dias_total = int(tpl.get("Dias_Teoricos_Total", 0))
+        fecha_est_fin = sm.add_business_days(now.date(), dias_total).strftime("%Y-%m-%d")
+        nombre_inst = tpl.get("Nombre", "")
+
+        sm.append_row(C.HOJA_INSTANCIAS, [
+            inst_id, tpl_id, nombre_inst, "", user.get("Nombre", ""),
+            now.strftime("%Y-%m-%d"), fecha_est_fin, "", "En Proceso", 0,
+            tpl.get("ID_Autorizacion", "Plantilla aprobada"), "", ""
+        ])
+
+        # Create avance records with edited responsables
+        for act in edited_acts:
+            num = int(act.get("Numero", 0))
+            avance_id = f"AV-{inst_id}-{num:02d}"
+
+            if num == 1:
+                f_inicio = now.strftime("%Y-%m-%d")
+                dias = int(act.get("Dias_Teoricos", 1))
+                f_limite = sm.add_business_days(now.date(), dias).strftime("%Y-%m-%d")
+                estatus = "Activa"
+            else:
+                f_inicio = ""
+                f_limite = ""
+                estatus = "Pendiente"
+
+            sm.append_row(C.HOJA_AVANCE, [
+                avance_id, inst_id, num, act.get("Actividad", ""), act.get("Fase", ""),
+                act.get("Responsable", ""), act.get("Correo", ""),
+                act.get("Dias_Teoricos", 1), f_inicio, f_limite, "",
+                estatus, "", "", act.get("Evidencia_Requerida", "No"), "No"
             ])
 
-            # Create avance records
-            for act in tpl_acts:
-                num = int(act.get("Numero", 0))
-                avance_id = f"AV-{inst_id}-{num:02d}"
+        # Notify first responsible
+        first = edited_acts[0]
+        dias_first = int(first.get("Dias_Teoricos", 1))
+        f_limite_first = sm.add_business_days(now.date(), dias_first).strftime("%Y-%m-%d")
+        notif.notify_task_activated(
+            first.get("Correo", ""), first.get("Responsable", ""),
+            nombre_inst, first.get("Actividad", ""), dias_first, f_limite_first
+        )
 
-                if num == 1:
-                    f_inicio = now.strftime("%Y-%m-%d")
-                    dias = int(act.get("Dias_Teoricos", 1))
-                    f_limite = sm.add_business_days(now.date(), dias).strftime("%Y-%m-%d")
-                    estatus = "Activa"
-                else:
-                    f_inicio = ""
-                    f_limite = ""
-                    estatus = "Pendiente"
+        # Send welcome to new users
+        for nu in new_users:
+            first_act = edited_acts[0].get("Actividad", "") if edited_acts else ""
+            notif.notify_welcome(nu["Correo"], nu["Nombre"], nombre_inst,
+                                  first_act, nu.get("Password", ""))
 
-                sm.append_row(C.HOJA_AVANCE, [
-                    avance_id, inst_id, num, act.get("Actividad", ""), act.get("Fase", ""),
-                    act.get("Responsable", ""), act.get("Correo", ""),
-                    act.get("Dias_Teoricos", 1), f_inicio, f_limite, "",
-                    estatus, "", "", act.get("Evidencia_Requerida", "No"), "No"
-                ])
+        # Update template usage count
+        veces = int(tpl.get("Veces_Utilizada", 0)) + 1
+        sm.update_cell_by_id(C.HOJA_PLANTILLAS, "ID_Plantilla", tpl_id, "Veces_Utilizada", veces)
 
-            # Notify first responsible
-            first = tpl_acts[0]
-            dias_first = int(first.get("Dias_Teoricos", 1))
-            f_limite_first = sm.add_business_days(now.date(), dias_first).strftime("%Y-%m-%d")
-            notif.notify_task_activated(
-                first.get("Correo", ""), first.get("Responsable", ""),
-                nombre_inst, first.get("Actividad", ""), dias_first, f_limite_first
-            )
+        sm.log_action(user["Nombre"], "Lanzar instancia", "Instancia", inst_id, nombre_inst)
 
-            # Update template usage count
-            veces = int(tpl.get("Veces_Utilizada", 0)) + 1
-            sm.update_cell_by_id(C.HOJA_PLANTILLAS, "ID_Plantilla", tpl_id, "Veces_Utilizada", veces)
-
-            sm.log_action(user["Nombre"], "Lanzar instancia", "Instancia", inst_id, nombre_inst)
-
-            st.session_state.show_launch = False
-            st.session_state.selected_template = None
-            st.success(f"✅ Proceso lanzado exitosamente: {inst_id}")
-            st.rerun()
-
-    with col2:
-        if st.button("❌ Cancelar", use_container_width=True):
-            st.session_state.show_launch = False
-            st.session_state.selected_template = None
-            st.rerun()
+        st.session_state.show_launch = False
+        st.session_state.selected_template = None
+        st.success(f"✅ Proceso lanzado exitosamente: {inst_id}")
+        st.rerun()
 
 
 # ════════════════════════════════════════════
@@ -1018,7 +1078,10 @@ def page_ver_instancia():
         f'  <div style="font-size:.78rem;color:#8592A3;margin-top:4px;">Creado: {inst.get("Fecha_Creacion","")}</div>'
         f'</div></div>'
         f'<div style="margin-top:14px;">{progress_bar(pct)}</div>'
-        f'<div style="margin-top:10px;display:flex;gap:14px;flex-wrap:wrap;">'
+        f'<div style="margin-top:6px;font-size:.82rem;color:#4B5563;">'
+        f'  🏭 Proceso iniciado por <strong>{inst.get("Gerente_Responsable","")}</strong>'
+        f'  el <strong>{inst.get("Fecha_Creacion","")}</strong></div>'
+        f'<div style="margin-top:8px;display:flex;gap:14px;flex-wrap:wrap;">'
         f'  {sem_dot("green")}<span style="font-size:.8rem;">{on_time_count} en tiempo</span>'
         f'  {sem_dot("yellow")}<span style="font-size:.8rem;">{at_risk_count} en riesgo</span>'
         f'  {sem_dot("red")}<span style="font-size:.8rem;">{overdue_count} vencidas</span>'
