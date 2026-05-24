@@ -181,8 +181,8 @@ def login_page():
         st.markdown("""
         <p style="text-align:center;margin-bottom:18px;font-size:14px;letter-spacing:1px;
             color:#c8d8f0;line-height:1.6;font-family:'Rajdhani',sans-serif;">
-            Sistema de Seguimiento y Control·
-            <span style="color:#ffffff;font-weight:600;"> </span><br>
+            Sistema de Seguimiento ·
+            <span style="color:#ffffff;font-weight:600;">Procesos Transversales</span><br>
             Grupo IMEMSA
         </p>
         """, unsafe_allow_html=True)
@@ -804,51 +804,39 @@ def launch_instance_form():
     </div>
     """, unsafe_allow_html=True)
 
-    with st.form("launch_form"):
-        nombre_inst = st.text_input("📋 Nombre de la Instancia",
-                                     placeholder="Ej. PROD. JULIO RECEP. SEPTIEMBRE 2026")
-        descripcion = st.text_area("📝 Descripción / Detalles")
-        c1, c2 = st.columns(2)
-        unidades = c1.number_input("📦 Unidades (si aplica)", min_value=0, value=0)
-        importe = c2.number_input("💰 Importe (si aplica)", min_value=0.0, value=0.0, format="%.2f")
+    st.markdown("""
+    <div class="warning-box">
+        ⏱ <strong>Importante:</strong> Al dar clic en <em>Lanzar Proceso</em>, el sistema activará
+        la primera actividad y comenzará a contabilizar los días hábiles asignados.
+        Se notificará al responsable de la primera tarea por correo electrónico.
+    </div>
+    """, unsafe_allow_html=True)
 
-        col1, col2 = st.columns(2)
-        submit = col1.form_submit_button("🚀 Lanzar Proceso", type="primary", use_container_width=True)
-        cancel = col2.form_submit_button("❌ Cancelar", use_container_width=True)
+    col1, col2 = st.columns(2)
+    with col1:
+        if st.button("🚀 Lanzar Proceso", type="primary", use_container_width=True):
+            # Get template activities
+            all_acts = sm.get_all_records(C.HOJA_ACTIVIDADES_PLANTILLA)
+            tpl_acts = [a for a in all_acts if a["ID_Plantilla"] == tpl_id]
+            tpl_acts.sort(key=lambda x: int(x.get("Numero", 0)))
 
-    if cancel:
-        st.session_state.show_launch = False
-        st.session_state.selected_template = None
-        st.rerun()
+            if not tpl_acts:
+                st.error("La plantilla no tiene actividades definidas.")
+                return
 
-    if submit:
-        if not nombre_inst:
-            st.error("Ingresa un nombre para la instancia.")
-            return
+            # Create instance
+            user = st.session_state.user
+            inst_id = sm.get_next_instance_id()
+            now = datetime.now()
+            dias_total = int(tpl.get("Dias_Teoricos_Total", 0))
+            fecha_est_fin = sm.add_business_days(now.date(), dias_total).strftime("%Y-%m-%d")
+            nombre_inst = tpl.get("Nombre", "")
 
-        # Get template activities
-        all_acts = sm.get_all_records(C.HOJA_ACTIVIDADES_PLANTILLA)
-        tpl_acts = [a for a in all_acts if a["ID_Plantilla"] == tpl_id]
-        tpl_acts.sort(key=lambda x: int(x.get("Numero", 0)))
-
-        if not tpl_acts:
-            st.error("La plantilla no tiene actividades definidas.")
-            return
-
-        # Create instance
-        user = st.session_state.user
-        inst_id = sm.get_next_instance_id()
-        now = datetime.now()
-        dias_total = int(tpl.get("Dias_Teoricos_Total", 0))
-        fecha_est_fin = sm.add_business_days(now.date(), dias_total).strftime("%Y-%m-%d")
-
-        sm.append_row(C.HOJA_INSTANCIAS, [
-            inst_id, tpl_id, nombre_inst, descripcion, user.get("Nombre", ""),
-            now.strftime("%Y-%m-%d"), fecha_est_fin, "", "En Proceso", 0,
-            tpl.get("ID_Autorizacion", "Plantilla aprobada"),
-            unidades if unidades > 0 else "",
-            importe if importe > 0 else ""
-        ])
+            sm.append_row(C.HOJA_INSTANCIAS, [
+                inst_id, tpl_id, nombre_inst, "", user.get("Nombre", ""),
+                now.strftime("%Y-%m-%d"), fecha_est_fin, "", "En Proceso", 0,
+                tpl.get("ID_Autorizacion", "Plantilla aprobada"), "", ""
+            ])
 
         # Create avance records
         for act in tpl_acts:
@@ -891,6 +879,12 @@ def launch_instance_form():
         st.session_state.selected_template = None
         st.success(f"✅ Proceso lanzado exitosamente: {inst_id}")
         st.rerun()
+
+    with col2:
+        if st.button("❌ Cancelar", use_container_width=True):
+            st.session_state.show_launch = False
+            st.session_state.selected_template = None
+            st.rerun()
 
 
 # ════════════════════════════════════════════
@@ -1168,7 +1162,7 @@ def export_instance_to_excel(inst, avances, evidencias, comentarios):
 def page_pm_panel():
     st.markdown('<div class="section-header">👔 Panel del Project Manager</div>', unsafe_allow_html=True)
 
-    tab1, tab2, tab3 = st.tabs(["🔑 Autorizaciones", "📊 Dashboard Global", "👥 Usuarios"])
+    tab1, tab2, tab3, tab4 = st.tabs(["🔑 Autorizaciones", "📊 Dashboard Global", "👥 Usuarios", "📥 Plantilla Excel"])
 
     with tab1:
         pm_autorizaciones()
@@ -1176,6 +1170,10 @@ def page_pm_panel():
         pm_dashboard()
     with tab3:
         pm_usuarios()
+    with tab4:
+        st.markdown("Descarga la plantilla Excel modelo para que los gerentes llenen sus procesos.")
+        if st.button("📥 Generar Plantilla Modelo", key="pm_gen_tpl"):
+            generate_template_excel()
 
 
 def pm_autorizaciones():
@@ -1303,9 +1301,7 @@ def pm_usuarios():
     users = sm.get_all_records(C.HOJA_USUARIOS)
     if users:
         df = pd.DataFrame(users)
-        # Hide password column in display
-        display_cols = [c for c in df.columns if c != "Password"]
-        st.dataframe(df[display_cols], use_container_width=True, hide_index=True)
+        st.dataframe(df, use_container_width=True, hide_index=True)
 
     st.markdown("### Agregar Usuario")
     with st.form("add_user"):
@@ -1370,15 +1366,9 @@ def pm_usuarios():
 def page_admin():
     st.markdown('<div class="section-header">⚙️ Administración del Sistema</div>', unsafe_allow_html=True)
 
-    tab1, tab2, tab3 = st.tabs(["🗄️ Inicializar BD", "📋 Log del Sistema", "📥 Plantilla Excel Modelo"])
+    tab1, tab2 = st.tabs(["📋 Log del Sistema", "📥 Plantilla Excel Modelo"])
 
     with tab1:
-        st.markdown("Crea todas las hojas necesarias en Google Sheets si no existen.")
-        if st.button("🔧 Inicializar Hojas", type="primary"):
-            sm.init_spreadsheet()
-            st.success("✅ Hojas inicializadas correctamente.")
-
-    with tab2:
         logs = sm.get_all_records(C.HOJA_LOG)
         if logs:
             df = pd.DataFrame(logs)
@@ -1387,7 +1377,7 @@ def page_admin():
         else:
             st.info("No hay registros en el log.")
 
-    with tab3:
+    with tab2:
         st.markdown("Descarga la plantilla Excel modelo para que los gerentes llenen sus procesos.")
         if st.button("📥 Generar Plantilla Modelo"):
             generate_template_excel()
