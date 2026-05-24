@@ -1,318 +1,302 @@
 """
-CSS personalizado para la Plataforma de Procesos Transversales IMEMSA
+CSS profesional para Plataforma de Procesos Transversales IMEMSA
+Diseño replicado de la app de Motores Yamaha
 """
+
+NAVY = "#0D2B6E"
+RED = "#C41E2E"
+
 
 def get_css():
     return """
     <style>
-    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
+    @import url('https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@400;600;700;800&family=Source+Sans+3:wght@300;400;600;700&display=swap');
 
-    /* ── Global ── */
-    .stApp { font-family: 'Inter', sans-serif; }
-    .block-container { max-width: 1200px; padding-top: 1rem; }
+    html, body, [data-testid="stAppViewContainer"] {
+        font-family: 'Source Sans 3', sans-serif; background: #F0F3F9;
+    }
+    h1,h2,h3,h4 { font-family: 'Barlow Condensed', sans-serif; letter-spacing:.5px; }
 
-    /* ── Header/Logo ── */
-    .imemsa-header {
-        background: linear-gradient(135deg, #0D2B6E 0%, #1a3f8a 100%);
-        padding: 1.2rem 2rem;
-        border-radius: 12px;
-        margin-bottom: 1.5rem;
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        box-shadow: 0 4px 20px rgba(13,43,110,0.3);
+    /* ── Sidebar ── */
+    [data-testid="stSidebar"] {
+        background: linear-gradient(180deg, #0D2B6E 0%, #091D4E 100%) !important;
+        border-right: none !important;
     }
-    .imemsa-header h1 {
-        color: white !important;
-        font-size: 1.6rem !important;
-        font-weight: 700 !important;
-        margin: 0 !important;
-        padding: 0 !important;
+    [data-testid="stSidebar"] * { color: #E8EDF7 !important; }
+    [data-testid="stSidebar"] .sidebar-divider {
+        border-top: 1px solid rgba(255,255,255,.15); margin: 12px 0;
     }
-    .imemsa-header .subtitle {
-        color: rgba(255,255,255,0.8);
-        font-size: 0.85rem;
-        margin-top: 2px;
+    [data-testid="stSidebar"] [data-testid="stButton"] button {
+        background: rgba(255,255,255,.08) !important;
+        border: 1px solid rgba(255,255,255,.18) !important;
+        color: #fff !important; border-radius: 8px !important;
+        font-family: 'Source Sans 3', sans-serif !important;
+        font-weight: 600 !important; transition: background .2s;
     }
-    .user-badge {
-        background: rgba(255,255,255,0.15);
-        padding: 0.4rem 1rem;
-        border-radius: 20px;
-        color: white;
-        font-size: 0.85rem;
-        font-weight: 500;
+    [data-testid="stSidebar"] [data-testid="stButton"] button:hover {
+        background: rgba(255,255,255,.18) !important;
     }
 
-    /* ── Navigation Tabs ── */
-    .nav-container {
-        display: flex;
-        gap: 0.5rem;
-        margin-bottom: 1.5rem;
-        flex-wrap: wrap;
-    }
-    .nav-btn {
-        padding: 0.6rem 1.2rem;
-        border-radius: 8px;
-        font-size: 0.85rem;
-        font-weight: 600;
-        cursor: pointer;
-        transition: all 0.2s;
-        border: 2px solid #e0e0e0;
-        background: white;
-        color: #0D2B6E;
-        text-decoration: none;
-    }
-    .nav-btn:hover { border-color: #0D2B6E; background: #F0F4FA; }
-    .nav-btn.active {
-        background: #0D2B6E;
-        color: white;
-        border-color: #0D2B6E;
-    }
+    .main .block-container { padding: 1.5rem 2rem 3rem 2rem; max-width:1400px; }
 
-    /* ── Cards ── */
+    /* ── Metric Cards ── */
     .metric-card {
-        background: white;
-        border-radius: 12px;
-        padding: 1.2rem;
-        box-shadow: 0 2px 12px rgba(0,0,0,0.06);
-        border-left: 4px solid #0D2B6E;
-        transition: transform 0.2s;
+        background: #fff; border-radius: 12px; padding: 20px 24px;
+        box-shadow: 0 1px 6px rgba(13,43,110,.10);
+        border-left: 4px solid var(--card-accent, #0D2B6E);
+        transition: transform .15s, box-shadow .15s;
     }
-    .metric-card:hover { transform: translateY(-2px); }
-    .metric-card .value {
-        font-size: 2rem;
-        font-weight: 800;
-        color: #0D2B6E;
-        line-height: 1;
+    .metric-card:hover { transform: translateY(-2px); box-shadow: 0 4px 14px rgba(13,43,110,.14); }
+    .metric-card .mc-value {
+        font-family: 'Barlow Condensed', sans-serif;
+        font-size: 2.4rem; font-weight: 800; line-height: 1; color: #0D2B6E;
     }
-    .metric-card .label {
-        font-size: 0.8rem;
-        color: #666;
-        margin-top: 0.3rem;
-        text-transform: uppercase;
-        letter-spacing: 0.5px;
+    .metric-card .mc-label {
+        font-size: .82rem; font-weight: 600; text-transform: uppercase;
+        letter-spacing: .6px; color: #8592A3; margin-top: 4px;
     }
-    .metric-card.red { border-left-color: #C41E2E; }
-    .metric-card.red .value { color: #C41E2E; }
-    .metric-card.green { border-left-color: #28a745; }
-    .metric-card.green .value { color: #28a745; }
-    .metric-card.yellow { border-left-color: #ffc107; }
-    .metric-card.yellow .value { color: #e6a800; }
+    .metric-card.green { --card-accent: #22C55E; }
+    .metric-card.green .mc-value { color: #065F46; }
+    .metric-card.yellow { --card-accent: #F59E0B; }
+    .metric-card.yellow .mc-value { color: #92400E; }
+    .metric-card.red { --card-accent: #EF4444; }
+    .metric-card.red .mc-value { color: #991B1B; }
 
-    /* ── Activity Card ── */
-    .activity-card {
-        background: white;
-        border-radius: 10px;
-        padding: 1rem 1.2rem;
-        margin-bottom: 0.8rem;
-        border-left: 5px solid #e0e0e0;
-        box-shadow: 0 1px 6px rgba(0,0,0,0.05);
-        transition: all 0.2s;
+    /* ── Process/Order Cards ── */
+    .process-card {
+        background: #fff; border-radius: 12px; padding: 20px 22px;
+        box-shadow: 0 1px 6px rgba(13,43,110,.09); margin-bottom: 14px;
+        border-top: 3px solid #0D2B6E; transition: transform .15s, box-shadow .15s;
     }
-    .activity-card:hover { box-shadow: 0 3px 15px rgba(0,0,0,0.1); }
-    .activity-card.completada { border-left-color: #28a745; background: #f0faf3; }
-    .activity-card.activa { border-left-color: #0D2B6E; background: #f0f4fa; }
-    .activity-card.vencida { border-left-color: #C41E2E; background: #fdf0f0; }
-    .activity-card.en-riesgo { border-left-color: #ffc107; background: #fffcf0; }
-    .activity-card.pendiente { border-left-color: #ccc; }
+    .process-card:hover { transform: translateY(-2px); box-shadow: 0 4px 16px rgba(13,43,110,.14); }
+    .process-folio {
+        font-family: 'Barlow Condensed', sans-serif;
+        font-size: 1.15rem; font-weight: 700; color: #0D2B6E;
+    }
+    .process-desc { font-size: .85rem; color: #4B5563; margin-top: 2px; }
 
-    .activity-header {
-        display: flex;
-        justify-content: space-between;
-        align-items: flex-start;
-        margin-bottom: 0.5rem;
-    }
-    .activity-num {
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        width: 30px; height: 30px;
-        border-radius: 50%;
-        background: #0D2B6E;
-        color: white;
-        font-weight: 700;
-        font-size: 0.8rem;
-        margin-right: 0.6rem;
-        flex-shrink: 0;
-    }
-    .activity-title {
-        font-weight: 700;
-        color: #0D2B6E;
-        font-size: 0.95rem;
-    }
-    .activity-desc {
-        color: #666;
-        font-size: 0.82rem;
-        margin-top: 0.2rem;
-    }
-
-    /* ── Status Badges ── */
+    /* ── Badges ── */
     .badge {
-        display: inline-block;
-        padding: 0.2rem 0.7rem;
-        border-radius: 12px;
-        font-size: 0.75rem;
-        font-weight: 600;
-        text-transform: uppercase;
-        letter-spacing: 0.3px;
+        display: inline-block; padding: 3px 10px; border-radius: 20px;
+        font-size: .72rem; font-weight: 700; text-transform: uppercase; letter-spacing: .5px;
     }
-    .badge-completada { background: #d4edda; color: #155724; }
-    .badge-activa, .badge-en-proceso { background: #cce5ff; color: #004085; }
-    .badge-vencida { background: #f8d7da; color: #721c24; }
-    .badge-en-riesgo { background: #fff3cd; color: #856404; }
-    .badge-pendiente { background: #e9ecef; color: #495057; }
-    .badge-vigente { background: #d4edda; color: #155724; }
-    .badge-consumida { background: #cce5ff; color: #004085; }
-    .badge-revocada { background: #f8d7da; color: #721c24; }
-    .badge-borrador { background: #fff3cd; color: #856404; }
-
-    /* ── Responsible Avatar ── */
-    .avatar {
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        width: 32px; height: 32px;
-        border-radius: 50%;
-        font-weight: 700;
-        font-size: 0.75rem;
-        color: white;
-        margin-right: 0.4rem;
-        flex-shrink: 0;
-    }
+    .badge-en-proceso, .badge-activa { background: #DBEAFE; color: #1E40AF; }
+    .badge-completada, .badge-completado { background: #D1FAE5; color: #065F46; }
+    .badge-cancelado { background: #F3F4F6; color: #6B7280; }
+    .badge-pendiente { background: #F3F4F6; color: #6B7280; }
+    .badge-vencida { background: #FEE2E2; color: #991B1B; }
+    .badge-en-riesgo { background: #FEF3C7; color: #92400E; }
+    .badge-vigente { background: #D1FAE5; color: #065F46; }
+    .badge-consumida { background: #DBEAFE; color: #1E40AF; }
+    .badge-revocada { background: #FEE2E2; color: #991B1B; }
+    .badge-borrador { background: #FEF3C7; color: #92400E; }
 
     /* ── Progress Bar ── */
-    .progress-container {
-        background: #e9ecef;
-        border-radius: 10px;
-        height: 20px;
-        overflow: hidden;
-        margin: 0.5rem 0;
+    .progress-wrap { background: #E5E7EB; border-radius: 6px; height: 8px; overflow:hidden; margin: 8px 0; }
+    .progress-fill { height: 8px; border-radius: 6px;
+                     background: linear-gradient(90deg, #0D2B6E, #2563EB); transition: width .4s; }
+
+    /* ── Semaphore Dots ── */
+    .semaphore-dot {
+        display: inline-block; width: 12px; height: 12px;
+        border-radius: 50%; margin-right: 6px; vertical-align: middle;
     }
-    .progress-bar {
-        height: 100%;
-        border-radius: 10px;
-        background: linear-gradient(90deg, #0D2B6E, #1a5cb5);
-        transition: width 0.5s ease;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        color: white;
-        font-size: 0.7rem;
-        font-weight: 700;
+    .sem-green  { background: #22C55E; box-shadow: 0 0 6px #22C55E88; }
+    .sem-yellow { background: #F59E0B; box-shadow: 0 0 6px #F59E0B88; }
+    .sem-red    { background: #EF4444; box-shadow: 0 0 6px #EF444488; animation: pulse-red 1.2s infinite; }
+    .sem-gray   { background: #D1D5DB; }
+    @keyframes pulse-red {
+        0%,100% { box-shadow: 0 0 6px #EF444488; }
+        50%      { box-shadow: 0 0 14px #EF4444CC; }
     }
 
-    /* ── Phase Divider ── */
+    /* ── Activity Rows ── */
+    .act-row {
+        background: #fff; border-radius: 10px; padding: 14px 18px; margin-bottom: 8px;
+        border-left: 4px solid var(--act-color, #D1D5DB);
+        box-shadow: 0 1px 4px rgba(0,0,0,.06);
+        transition: transform .12s, box-shadow .12s;
+    }
+    .act-row:hover { transform: translateX(3px); box-shadow: 0 2px 8px rgba(0,0,0,.08); }
+    .act-row-completada  { --act-color: #22C55E; background: #F0FDF4; }
+    .act-row-activa      { --act-color: #2563EB; }
+    .act-row-en-riesgo   { --act-color: #F59E0B; background: #FFFBEB; }
+    .act-row-pendiente   { --act-color: #D1D5DB; }
+    .act-row-vencida     { --act-color: #EF4444; background: #FEF2F2; }
+    .act-name {
+        font-family: 'Barlow Condensed', sans-serif;
+        font-size: 1.05rem; font-weight: 700; color: #0D2B6E;
+    }
+    .act-meta { font-size: .78rem; color: #8592A3; margin-top: 2px; }
+
+    /* ── Phase Chip ── */
+    .phase-chip {
+        display: inline-block; padding: 2px 10px; border-radius: 12px;
+        font-size: .70rem; font-weight: 700; text-transform: uppercase;
+        letter-spacing: .5px; background: #EEF2FF; color: #3730A3; margin-right: 6px;
+    }
+
+    /* ── Phase Header ── */
     .phase-header {
-        background: linear-gradient(90deg, #0D2B6E, transparent);
-        padding: 0.5rem 1rem;
-        border-radius: 6px;
-        color: white;
-        font-weight: 700;
-        font-size: 0.9rem;
-        margin: 1rem 0 0.5rem 0;
+        font-family: 'Barlow Condensed', sans-serif;
+        font-size: 1.1rem; font-weight: 700; color: #0D2B6E;
+        background: linear-gradient(90deg, #EEF2FF, transparent);
+        padding: 8px 14px; border-radius: 8px;
+        border-left: 4px solid #3730A3;
+        margin: 16px 0 8px 0;
+    }
+
+    /* ── Section Header ── */
+    .section-header {
+        font-family: 'Barlow Condensed', sans-serif;
+        font-size: 1.5rem; font-weight: 800; color: #0D2B6E;
+        border-bottom: 3px solid #C41E2E;
+        padding-bottom: 6px; margin-bottom: 20px; letter-spacing: .4px;
+    }
+
+    /* ── Avatar ── */
+    .avatar {
+        display: inline-flex; align-items:center; justify-content:center;
+        width: 38px; height: 38px; border-radius: 50%;
+        font-family: 'Barlow Condensed', sans-serif;
+        font-weight: 800; font-size: 1rem; color: #fff; margin-right: 8px;
+        vertical-align: middle;
+    }
+
+    /* ── Days Badge ── */
+    .days-badge {
+        font-size: .68rem; font-weight: 700; padding: 2px 8px;
+        border-radius: 12px; display: inline-block;
+    }
+    .days-ok { background: #D1FAE5; color: #065F46; }
+    .days-warn { background: #FEF3C7; color: #92400E; }
+    .days-over { background: #FEE2E2; color: #991B1B; }
+
+    /* ── Instance Header Card ── */
+    .instance-header {
+        background: #fff; border-radius: 12px; padding: 24px;
+        box-shadow: 0 1px 6px rgba(13,43,110,.10);
+        border-top: 4px solid #0D2B6E; margin-bottom: 20px;
+    }
+    .instance-folio {
+        font-family: 'Barlow Condensed', sans-serif;
+        font-size: 1.5rem; font-weight: 800; color: #0D2B6E;
     }
 
     /* ── Template Card ── */
     .template-card {
-        background: white;
-        border-radius: 12px;
-        padding: 1.2rem;
-        box-shadow: 0 2px 12px rgba(0,0,0,0.06);
-        border: 1px solid #e8edf5;
-        transition: all 0.2s;
-        margin-bottom: 1rem;
-    }
-    .template-card:hover { box-shadow: 0 4px 20px rgba(0,0,0,0.1); border-color: #0D2B6E; }
-
-    /* ── Instance Header ── */
-    .instance-header {
-        background: white;
-        border-radius: 12px;
-        padding: 1.5rem;
-        box-shadow: 0 2px 12px rgba(0,0,0,0.06);
-        border: 1px solid #e8edf5;
-        margin-bottom: 1.5rem;
-    }
-    .instance-folio {
-        font-size: 1.3rem;
-        font-weight: 800;
-        color: #0D2B6E;
-    }
-
-    /* ── Login ── */
-    .login-container {
-        max-width: 400px;
-        margin: 4rem auto;
-        background: white;
-        padding: 2.5rem;
-        border-radius: 16px;
-        box-shadow: 0 8px 40px rgba(13,43,110,0.15);
-        text-align: center;
-    }
-    .login-title {
-        font-size: 2rem;
-        font-weight: 800;
-        color: #0D2B6E;
-        margin-bottom: 0.3rem;
-    }
-    .login-subtitle {
-        color: #666;
-        font-size: 0.9rem;
-        margin-bottom: 2rem;
-    }
-
-    /* ── Semaforo dots ── */
-    .semaforo { display: inline-flex; gap: 0.4rem; align-items: center; }
-    .dot {
-        width: 12px; height: 12px;
-        border-radius: 50%;
-        display: inline-block;
-    }
-    .dot-green { background: #28a745; }
-    .dot-yellow { background: #ffc107; }
-    .dot-red { background: #C41E2E; }
-    .dot-gray { background: #ccc; }
-
-    /* ── Misc ── */
-    .section-title {
-        font-size: 1.1rem;
-        font-weight: 700;
-        color: #0D2B6E;
-        border-bottom: 3px solid #C41E2E;
-        padding-bottom: 0.4rem;
-        margin: 1.5rem 0 1rem 0;
-    }
-    .info-box {
-        background: #f0f4fa;
+        background: #fff; border-radius: 12px; padding: 18px 22px;
+        box-shadow: 0 1px 6px rgba(13,43,110,.09); margin-bottom: 14px;
         border-left: 4px solid #0D2B6E;
-        padding: 0.8rem 1rem;
-        border-radius: 0 8px 8px 0;
-        margin: 0.5rem 0;
-        font-size: 0.9rem;
+        transition: transform .15s, box-shadow .15s;
+    }
+    .template-card:hover { transform: translateY(-2px); box-shadow: 0 4px 16px rgba(13,43,110,.14); }
+
+    /* ── Info/Warning/Success Boxes ── */
+    .info-box {
+        background: #EEF2FF; border-left: 4px solid #3730A3;
+        padding: 12px 16px; border-radius: 0 8px 8px 0;
+        font-size: .9rem; color: #1E1B4B; margin: 8px 0;
     }
     .warning-box {
-        background: #fff3cd;
-        border-left: 4px solid #ffc107;
-        padding: 0.8rem 1rem;
-        border-radius: 0 8px 8px 0;
-        margin: 0.5rem 0;
-    }
-    .error-box {
-        background: #f8d7da;
-        border-left: 4px solid #C41E2E;
-        padding: 0.8rem 1rem;
-        border-radius: 0 8px 8px 0;
-        margin: 0.5rem 0;
+        background: #FEF3C7; border-left: 4px solid #F59E0B;
+        padding: 12px 16px; border-radius: 0 8px 8px 0;
+        font-size: .9rem; color: #92400E; margin: 8px 0;
     }
     .success-box {
-        background: #d4edda;
-        border-left: 4px solid #28a745;
-        padding: 0.8rem 1rem;
-        border-radius: 0 8px 8px 0;
-        margin: 0.5rem 0;
+        background: #D1FAE5; border-left: 4px solid #22C55E;
+        padding: 12px 16px; border-radius: 0 8px 8px 0;
+        font-size: .9rem; color: #065F46; margin: 8px 0;
+    }
+    .error-box {
+        background: #FEE2E2; border-left: 4px solid #EF4444;
+        padding: 12px 16px; border-radius: 0 8px 8px 0;
+        font-size: .9rem; color: #991B1B; margin: 8px 0;
     }
 
-    /* Hide default streamlit elements */
+    /* ── Comment Card ── */
+    .comment-card {
+        background: #F8FAFC; padding: 10px 16px; border-radius: 8px;
+        margin-bottom: 8px; border-left: 3px solid #D1D9E8;
+    }
+
+    /* ── Login Card ── */
+    .login-card {
+        max-width: 400px; margin: 0 auto; background: #fff;
+        padding: 36px 32px; border-radius: 16px;
+        box-shadow: 0 8px 40px rgba(13,43,110,.15);
+        border-top: 4px solid #0D2B6E;
+    }
+
+    /* ── Form Inputs ── */
+    [data-testid="stTextInput"] input,
+    [data-testid="stSelectbox"] select,
+    [data-testid="stNumberInput"] input,
+    [data-testid="stTextArea"] textarea {
+        border-radius: 8px !important;
+        border: 1.5px solid #D1D9E8 !important;
+        font-family: 'Source Sans 3', sans-serif !important;
+        background: #FFFFFF !important; color: #1F2937 !important;
+    }
+    [data-testid="stTextInput"] input::placeholder,
+    [data-testid="stTextArea"] textarea::placeholder { color: #9CA3AF !important; }
+
+    [data-testid="stSelectbox"] > div > div {
+        background: #FFFFFF !important;
+        border: 1.5px solid #D1D9E8 !important;
+        border-radius: 8px !important;
+    }
+    [data-testid="stSelectbox"] span,
+    [data-testid="stSelectbox"] p,
+    [data-testid="stSelectbox"] div[data-baseweb="select"] span {
+        color: #1F2937 !important;
+    }
+    .main [data-testid="stWidgetLabel"] p,
+    .main [data-testid="stWidgetLabel"] span,
+    [data-testid="stWidgetLabel"] p,
+    [data-testid="stWidgetLabel"] span,
+    [data-testid="stForm"] label,
+    .main label p, .main label span { color: #1F2937 !important; }
+
+    /* ── Tabs ── */
+    [data-testid="stTabs"] [data-baseweb="tab"] p,
+    [data-testid="stTabs"] [data-baseweb="tab"] span,
+    [data-testid="stTabs"] button[role="tab"] p,
+    [data-testid="stTabs"] button[role="tab"] span,
+    [data-testid="stTabs"] button[role="tab"] { color: #0D2B6E !important; }
+    [data-testid="stTabs"] button[role="tab"][aria-selected="true"] {
+        color: #0D2B6E !important; font-weight: 700 !important;
+        border-bottom: 3px solid #C41E2E !important;
+    }
+
+    [data-testid="stSidebar"] p,
+    [data-testid="stSidebar"] span,
+    [data-testid="stSidebar"] div,
+    [data-testid="stSidebar"] label { color: #E8EDF7 !important; }
+
+    /* ── Primary Button ── */
+    [data-testid="stButton"] button[kind="primary"] {
+        background: #0D2B6E !important; border: none !important;
+        border-radius: 8px !important; font-family: 'Source Sans 3', sans-serif !important;
+        font-weight: 700 !important; letter-spacing: .3px !important;
+        transition: background .2s !important;
+    }
+    [data-testid="stButton"] button[kind="primary"]:hover { background: #C41E2E !important; }
+
+    .stAlert { border-radius: 8px !important; }
+
+    /* ── Expander ── */
+    [data-testid="stExpander"] summary p,
+    [data-testid="stExpander"] summary span,
+    [data-testid="stExpander"] details summary p {
+        color: #0D2B6E !important; font-weight: 600 !important;
+    }
+    [data-testid="stExpander"] {
+        background: #EEF2FF !important;
+        border: 1.5px solid #C7D2FE !important; border-radius: 8px !important;
+    }
+
+    /* ── Hide Streamlit defaults ── */
     #MainMenu {visibility: hidden;}
     footer {visibility: hidden;}
     .stDeployButton {display: none;}
@@ -321,43 +305,52 @@ def get_css():
     """
 
 
+# ── Component Helpers ──
+
 def badge(text, tipo=None):
     if tipo is None:
         tipo = text.lower().replace(" ", "-")
-    css_class = f"badge-{tipo}"
-    return f'<span class="badge {css_class}">{text}</span>'
+    return f'<span class="badge badge-{tipo}">{text}</span>'
 
 
 AVATAR_COLORS = [
-    "#0D2B6E", "#C41E2E", "#1a5cb5", "#28a745", "#6f42c1",
-    "#e83e8c", "#fd7e14", "#20c997", "#007bff", "#6610f2"
+    "#0D2B6E", "#C41E2E", "#2563EB", "#059669", "#7C3AED",
+    "#DB2777", "#EA580C", "#0891B2", "#4F46E5", "#9333EA"
 ]
 
-
-def avatar(name, size=32):
+def avatar(name, size=38):
     initials = "".join([p[0].upper() for p in name.split()[:2]]) if name else "?"
     color_idx = sum(ord(c) for c in name) % len(AVATAR_COLORS) if name else 0
     color = AVATAR_COLORS[color_idx]
-    return (
-        f'<span class="avatar" style="width:{size}px;height:{size}px;'
-        f'background:{color};font-size:{size*0.38}px;">{initials}</span>'
-    )
+    return (f'<span class="avatar" style="width:{size}px;height:{size}px;'
+            f'background:{color};font-size:{size*0.38}px;">{initials}</span>')
 
 
 def metric_card(value, label, color=""):
     cls = f"metric-card {color}" if color else "metric-card"
-    return f"""
-    <div class="{cls}">
-        <div class="value">{value}</div>
-        <div class="label">{label}</div>
-    </div>
-    """
+    return f"""<div class="{cls}">
+        <div class="mc-value">{value}</div>
+        <div class="mc-label">{label}</div>
+    </div>"""
 
 
 def progress_bar(pct):
     pct = max(0, min(100, pct))
-    return f"""
-    <div class="progress-container">
-        <div class="progress-bar" style="width:{pct}%">{pct:.0f}%</div>
-    </div>
-    """
+    return (f'<div class="progress-wrap">'
+            f'<div class="progress-fill" style="width:{pct}%;"></div>'
+            f'</div><span style="font-size:.75rem;color:#8592A3;">{pct}% completado</span>')
+
+
+def days_badge(days):
+    if days is None:
+        return ""
+    if days > 2:
+        return f'<span class="days-badge days-ok">⏱ {days}d restantes</span>'
+    elif days >= 0:
+        return f'<span class="days-badge days-warn">⚠️ {days}d restantes</span>'
+    else:
+        return f'<span class="days-badge days-over">🔴 {abs(days)}d vencida</span>'
+
+
+def sem_dot(color):
+    return f'<span class="semaphore-dot sem-{color}"></span>'
