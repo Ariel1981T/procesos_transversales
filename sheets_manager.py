@@ -56,7 +56,10 @@ def _retry(func, max_retries=4, base_delay=3):
             error_code = getattr(e, 'response', None)
             status = error_code.status_code if error_code else 0
             if attempt < max_retries - 1:
-                wait = base_delay * (2 ** attempt)  # 3, 6, 12, 24 seconds
+                if status == 429:
+                    wait = 10 * (attempt + 1)  # 10, 20, 30 seconds for rate limit
+                else:
+                    wait = base_delay * (2 ** attempt)
                 time.sleep(wait)
             else:
                 raise e
