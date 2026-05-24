@@ -7,3 +7,4 @@ openpyxl
 cloudinary
 plotly
 supabase
+twilio
