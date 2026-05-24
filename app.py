@@ -285,6 +285,9 @@ def navigation():
             if st.button("📊  Mis Procesos", use_container_width=True, key="nav_mis_procesos"):
                 st.session_state.page = "mis_procesos"
                 st.rerun()
+            if st.button("📅  Calendario", use_container_width=True, key="nav_calendario"):
+                st.session_state.page = "calendario"
+                st.rerun()
 
         if rol in ["PM", "Admin"]:
             st.markdown('<div class="sidebar-divider"></div>', unsafe_allow_html=True)
@@ -363,19 +366,56 @@ def page_inicio():
             folio = inst.get("ID_Instancia", "")
             nombre = inst.get("Nombre_Instancia", "")
 
-            with st.container():
-                col1, col2, col3 = st.columns([3, 4, 1])
-                with col1:
-                    st.markdown(f"**{folio}**")
-                    st.caption(nombre)
-                with col2:
-                    st.markdown(progress_bar(pct), unsafe_allow_html=True)
-                with col3:
-                    if st.button("Ver ➜", key=f"ver_{folio}"):
-                        st.session_state.selected_instance = folio
-                        st.session_state.page = "ver_instancia"
-                        st.rerun()
-                st.divider()
+            # Find active activity for this instance
+            inst_avs = [a for a in avances if a.get("ID_Instancia") == folio
+                        and a.get("Estatus") in ["Activa", "Vencida"]]
+            active_act = inst_avs[0] if inst_avs else None
+
+            if active_act:
+                remaining = sm.remaining_business_days(active_act.get("Fecha_Limite", ""))
+                if remaining < 0:
+                    sem = "red"
+                    days_html = days_badge(remaining)
+                elif remaining <= C.DIAS_ALERTA_AMARILLA:
+                    sem = "yellow"
+                    days_html = days_badge(remaining)
+                else:
+                    sem = "green"
+                    days_html = days_badge(remaining)
+                act_info = (
+                    f'{sem_dot(sem)} '
+                    f'Actividad activa: <strong>{active_act.get("Actividad","")}</strong>'
+                    f' &nbsp;·&nbsp; Resp: {avatar(active_act.get("Responsable",""), 28)}'
+                    f'<span style="font-size:.82rem;">{active_act.get("Responsable","")}</span>'
+                    f' &nbsp;{days_html}'
+                )
+            else:
+                act_info = '<span style="color:var(--color-text-tertiary);">Sin actividad activa</span>'
+
+            st.markdown(
+                f'<div class="process-card">'
+                f'<div style="display:flex;justify-content:space-between;align-items:flex-start;">'
+                f'  <div>'
+                f'    <div class="process-folio">{folio}</div>'
+                f'    <div class="process-desc">{nombre}</div>'
+                f'  </div>'
+                f'  <div style="text-align:right;">'
+                f'    {badge(inst.get("Estatus","En Proceso"))}'
+                f'    <div style="font-size:.78rem;color:#8592A3;margin-top:4px;">'
+                f'    Creado: {inst.get("Fecha_Creacion","")}</div>'
+                f'  </div>'
+                f'</div>'
+                f'<div style="margin-top:10px;">{progress_bar(pct)}</div>'
+                f'<div style="margin-top:10px;display:flex;align-items:center;gap:8px;font-size:.82rem;color:#4B5563;">'
+                f'  {act_info}'
+                f'</div>'
+                f'</div>',
+                unsafe_allow_html=True,
+            )
+            if st.button("Ver actividades →", key=f"ver_{folio}", use_container_width=False):
+                st.session_state.selected_instance = folio
+                st.session_state.page = "ver_instancia"
+                st.rerun()
 
 
 # ════════════════════════════════════════════
@@ -1576,6 +1616,311 @@ def page_cambiar_pwd():
 
 
 # ════════════════════════════════════════════
+# PAGE: CALENDARIO GANTT
+# ════════════════════════════════════════════
+def page_calendario():
+    user = st.session_state.user
+    rol = user.get("Rol", "Responsable")
+    st.markdown('<div class="section-header">📅 Calendario de Procesos</div>', unsafe_allow_html=True)
+
+    instances = sm.get_all_records(C.HOJA_INSTANCIAS)
+    avances = sm.get_all_records(C.HOJA_AVANCE)
+
+    # Filter by role
+    if rol == "Gerente":
+        instances = [i for i in instances if i.get("Gerente_Responsable") == user.get("Nombre")]
+    # PM and Admin see all
+
+    active_instances = [i for i in instances if i.get("Estatus") == "En Proceso"]
+    if not active_instances:
+        st.markdown('<div class="info-box">No hay procesos activos para mostrar en el calendario.</div>',
+                    unsafe_allow_html=True)
+        return
+
+    # Build process data for JS
+    import json as _json
+    processes_js = []
+    all_dates = []
+
+    for inst in active_instances:
+        inst_id = inst.get("ID_Instancia", "")
+        inst_avs = [a for a in avances if a.get("ID_Instancia") == inst_id]
+        inst_avs.sort(key=lambda x: int(x.get("Numero_Actividad", 0)))
+
+        activities_js = []
+        for a in inst_avs:
+            start = a.get("Fecha_Inicio", "")
+            limite = a.get("Fecha_Limite", "")
+            cierre = a.get("Fecha_Cierre", "")
+            estatus = a.get("Estatus", "Pendiente")
+
+            # Calculate effective dates for display
+            if start:
+                all_dates.append(start)
+            if limite:
+                all_dates.append(limite)
+            if cierre:
+                all_dates.append(cierre)
+
+            # Determine bar end date
+            if estatus == "Completada" and cierre:
+                bar_end = cierre
+            elif limite:
+                bar_end = limite
+            else:
+                bar_end = ""
+
+            # Determine display status
+            if estatus == "Activa":
+                remaining = sm.remaining_business_days(limite) if limite else 0
+                if remaining < 0:
+                    display_status = "vencida"
+                elif remaining <= C.DIAS_ALERTA_AMARILLA:
+                    display_status = "en-riesgo"
+                else:
+                    display_status = "activa"
+            elif estatus == "Completada":
+                display_status = "completada"
+            else:
+                display_status = "pendiente"
+
+            dias = a.get("Dias_Teoricos", 1)
+            activities_js.append({
+                "num": int(a.get("Numero_Actividad", 0)),
+                "name": a.get("Actividad", ""),
+                "phase": a.get("Fase", ""),
+                "resp": a.get("Responsable", ""),
+                "start": start if start else "",
+                "end": bar_end if bar_end else "",
+                "status": display_status,
+                "days": int(dias) if dias else 1,
+            })
+
+        pct = inst.get("Porcentaje_Avance", 0)
+        try:
+            pct = int(float(str(pct).replace("%", "")))
+        except (ValueError, TypeError):
+            pct = 0
+
+        processes_js.append({
+            "id": inst_id,
+            "name": inst.get("Nombre_Instancia", inst_id),
+            "gerente": inst.get("Gerente_Responsable", ""),
+            "created": inst.get("Fecha_Creacion", ""),
+            "pct": pct,
+            "activities": activities_js,
+        })
+
+    # Calculate date range
+    if all_dates:
+        sorted_dates = sorted([d for d in all_dates if d])
+        min_date = sorted_dates[0] if sorted_dates else datetime.now().strftime("%Y-%m-%d")
+        max_date = sorted_dates[-1] if sorted_dates else datetime.now().strftime("%Y-%m-%d")
+    else:
+        min_date = datetime.now().strftime("%Y-%m-%d")
+        max_date = (datetime.now() + timedelta(days=30)).strftime("%Y-%m-%d")
+
+    # Add padding days
+    from datetime import datetime as dt_class
+    start_dt = dt_class.strptime(min_date, "%Y-%m-%d") - timedelta(days=2)
+    end_dt = dt_class.strptime(max_date, "%Y-%m-%d") + timedelta(days=5)
+    total_days = (end_dt - start_dt).days
+    start_date_str = start_dt.strftime("%Y-%m-%d")
+    today_str = datetime.now().strftime("%Y-%m-%d")
+
+    data_json = _json.dumps(processes_js)
+
+    gantt_html = f"""
+    <style>
+    .g-wrap{{font-family:var(--font-sans);padding:0}}
+    .g-tabs{{display:flex;gap:6px;margin-bottom:16px;flex-wrap:wrap}}
+    .g-tab{{padding:6px 14px;border-radius:8px;font-size:12px;cursor:pointer;
+      border:0.5px solid var(--color-border-secondary);background:var(--color-background-primary);
+      color:var(--color-text-secondary);transition:all .15s}}
+    .g-tab:hover{{border-color:#0D2B6E;color:#0D2B6E}}
+    .g-tab.active{{background:#0D2B6E;color:#fff;border-color:#0D2B6E}}
+    .g-legend{{display:flex;gap:14px;flex-wrap:wrap;margin-bottom:14px;font-size:11px;color:var(--color-text-secondary)}}
+    .g-legend span{{display:flex;align-items:center;gap:4px}}
+    .g-ldot{{width:10px;height:10px;border-radius:2px;display:inline-block}}
+    .g-cards{{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:10px;margin-bottom:16px}}
+    .g-card{{background:var(--color-background-secondary);border-radius:8px;padding:10px}}
+    .g-card-v{{font-size:20px;font-weight:500;color:var(--color-text-primary)}}
+    .g-card-l{{font-size:10px;color:var(--color-text-secondary);text-transform:uppercase;letter-spacing:.4px;margin-top:2px}}
+    .g-container{{overflow-x:auto}}
+    .g-grid{{display:grid;min-width:{max(900, total_days*24)}px;
+      grid-template-columns:240px 1fr}}
+    .g-label{{padding:4px 10px;font-size:11px;display:flex;align-items:center;gap:6px;
+      border-bottom:0.5px solid var(--color-border-tertiary);min-height:32px;white-space:nowrap;
+      color:var(--color-text-primary)}}
+    .g-label .gn{{font-weight:500;color:var(--color-text-tertiary);min-width:18px;font-size:10px}}
+    .g-label .ga{{font-weight:500;font-size:11px}}
+    .g-label .gr{{font-size:10px;color:var(--color-text-secondary)}}
+    .g-tl{{position:relative;border-bottom:0.5px solid var(--color-border-tertiary);min-height:32px}}
+    .g-bar{{position:absolute;height:20px;top:6px;border-radius:4px;display:flex;align-items:center;
+      padding:0 5px;font-size:9px;font-weight:500;color:#fff;transition:all .15s;cursor:default;
+      overflow:hidden;text-overflow:ellipsis;white-space:nowrap}}
+    .g-bar:hover{{filter:brightness(1.12);transform:scaleY(1.2)}}
+    .g-bar.completada{{background:#22C55E}}
+    .g-bar.activa{{background:#2563EB}}
+    .g-bar.en-riesgo{{background:#F59E0B}}
+    .g-bar.vencida{{background:#EF4444;animation:gpulse 1.5s infinite}}
+    .g-bar.pendiente{{background:var(--color-border-secondary);color:var(--color-text-secondary)}}
+    @keyframes gpulse{{0%,100%{{opacity:1}}50%{{opacity:.7}}}}
+    .g-dh{{text-align:center;font-size:9px;color:var(--color-text-tertiary);
+      padding:2px 0;border-bottom:0.5px solid var(--color-border-tertiary);
+      border-left:0.5px solid var(--color-border-tertiary)}}
+    .g-dh.we{{background:var(--color-background-secondary)}}
+    .g-today{{position:absolute;top:0;bottom:0;width:2px;background:#C41E2E;z-index:10;pointer-events:none}}
+    .g-today-lbl{{position:absolute;top:-16px;font-size:8px;color:#C41E2E;font-weight:500;
+      transform:translateX(-50%);white-space:nowrap}}
+    .g-phase{{background:var(--color-background-secondary);padding:3px 10px;font-size:11px;
+      font-weight:500;color:#3730A3;grid-column:1/-1}}
+    .g-tip{{position:fixed;background:var(--color-background-primary);border:0.5px solid var(--color-border-secondary);
+      border-radius:8px;padding:8px 12px;font-size:11px;color:var(--color-text-primary);
+      z-index:100;pointer-events:none;display:none;max-width:240px;line-height:1.5}}
+    .g-we-bg{{position:absolute;top:0;bottom:0;background:var(--color-background-secondary)}}
+    </style>
+
+    <div class="g-wrap">
+    <div class="g-cards" id="gCards"></div>
+    <div class="g-tabs" id="gTabs"></div>
+    <div class="g-legend">
+      <span><span class="g-ldot" style="background:#22C55E"></span>Completada</span>
+      <span><span class="g-ldot" style="background:#2563EB"></span>En proceso</span>
+      <span><span class="g-ldot" style="background:#F59E0B"></span>En riesgo</span>
+      <span><span class="g-ldot" style="background:#EF4444"></span>Vencida</span>
+      <span><span class="g-ldot" style="background:#ccc"></span>Pendiente</span>
+    </div>
+    <div class="g-container" id="gContainer"></div>
+    <div class="g-tip" id="gTip"></div>
+    </div>
+
+    <script>
+    const PROCS={data_json};
+    const START='{start_date_str}';
+    const DAYS={total_days};
+    const TODAY='{today_str}';
+    const DW=24;
+    let activeP='all';
+
+    function dd(a,b){{return Math.round((new Date(a)-new Date(b))/864e5);}}
+    function isWE(d){{const day=d.getDay();return day===0||day===6;}}
+    function fmtD(s){{const d=new Date(s);const m=['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];return d.getDate()+' '+m[d.getMonth()];}}
+
+    function getAllActs(){{
+      let all=[];
+      PROCS.forEach(p=>p.activities.forEach(a=>all.push({{...a,proc:p.name}})));
+      return all;
+    }}
+
+    function getActs(){{
+      if(activeP==='all') return getAllActs();
+      const p=PROCS.find(x=>x.id===activeP);
+      return p?p.activities.map(a=>({{...a,proc:p.name}})):[];
+    }}
+
+    function renderTabs(){{
+      const el=document.getElementById('gTabs');
+      let h='<button class="g-tab'+(activeP==='all'?' active':'')+'" onclick="activeP=\\'all\\';render()">Todos</button>';
+      PROCS.forEach(p=>{{
+        h+='<button class="g-tab'+(activeP===p.id?' active':'')+'" onclick="activeP=\\''+p.id+'\\';render()">'+p.name+'</button>';
+      }});
+      el.innerHTML=h;
+    }}
+
+    function renderCards(){{
+      const acts=getActs();
+      const comp=acts.filter(a=>a.status==='completada').length;
+      const act=acts.filter(a=>a.status==='activa').length;
+      const risk=acts.filter(a=>a.status==='en-riesgo'||a.status==='vencida').length;
+      const pct=acts.length?Math.round(comp/acts.length*100):0;
+      document.getElementById('gCards').innerHTML=
+        '<div class="g-card"><div class="g-card-v">'+acts.length+'</div><div class="g-card-l">Actividades</div></div>'+
+        '<div class="g-card"><div class="g-card-v" style="color:#22C55E">'+comp+'</div><div class="g-card-l">Completadas</div></div>'+
+        '<div class="g-card"><div class="g-card-v" style="color:#2563EB">'+act+'</div><div class="g-card-l">En proceso</div></div>'+
+        '<div class="g-card"><div class="g-card-v" style="color:#F59E0B">'+risk+'</div><div class="g-card-l">Riesgo/Vencidas</div></div>'+
+        '<div class="g-card"><div class="g-card-v">'+pct+'%</div><div class="g-card-l">Avance</div></div>';
+    }}
+
+    function renderGantt(){{
+      const acts=getActs();
+      const tw=DAYS*DW;
+      const el=document.getElementById('gContainer');
+      let h='<div class="g-grid" style="grid-template-columns:240px '+tw+'px;">';
+
+      h+='<div style="border-bottom:0.5px solid var(--color-border-tertiary);padding:0 10px;display:flex;align-items:end;padding-bottom:3px;font-size:10px;font-weight:500;color:var(--color-text-secondary)">Actividad</div>';
+      h+='<div style="display:flex;">';
+      for(let i=0;i<DAYS;i++){{
+        const d=new Date(START);d.setDate(d.getDate()+i);
+        const we=isWE(d);
+        const dn=d.getDate();
+        const mo=['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'][d.getMonth()];
+        const lbl=dn===1||i===0?dn+' '+mo:we?'':dn;
+        h+='<div class="g-dh'+(we?' we':'')+'" style="width:'+DW+'px;min-width:'+DW+'px;">'+lbl+'</div>';
+      }}
+      h+='</div>';
+
+      let curPhase='';
+      acts.forEach(a=>{{
+        if(a.phase!==curPhase && activeP!=='all'){{
+          curPhase=a.phase;
+          h+='<div class="g-phase">'+a.phase+'</div>';
+        }}
+        const procLbl=activeP==='all'?'<span style="font-size:9px;color:var(--color-text-tertiary);margin-left:4px">'+a.proc+'</span>':'';
+        h+='<div class="g-label"><span class="gn">'+String(a.num).padStart(2,'0')+'</span><div><span class="ga">'+a.name+'</span>'+procLbl+'<br><span class="gr">'+a.resp+'</span></div></div>';
+
+        const off=a.start?Math.max(0,dd(a.start,START)):0;
+        const dur=a.start&&a.end?Math.max(1,dd(a.end,a.start)):1;
+        const left=off*DW;
+        const width=dur*DW;
+
+        h+='<div class="g-tl">';
+        for(let i=0;i<DAYS;i++){{
+          const d=new Date(START);d.setDate(d.getDate()+i);
+          if(isWE(d)) h+='<div class="g-we-bg" style="left:'+(i*DW)+'px;width:'+DW+'px;"></div>';
+        }}
+        if(a.start){{
+          const tip=a.name+'|'+a.resp+'|'+(a.start?fmtD(a.start):'')+' → '+(a.end?fmtD(a.end):'')+' |'+a.days+'d hábiles|'+a.status;
+          const txt=dur>3?a.name.substring(0,Math.floor(width/6.5)):'';
+          h+='<div class="g-bar '+a.status+'" style="left:'+left+'px;width:'+width+'px;" data-tip="'+tip+'">'+txt+'</div>';
+        }}
+        const todayOff=dd(TODAY,START);
+        if(todayOff>=0&&todayOff<DAYS){{
+          h+='<div class="g-today" style="left:'+(todayOff*DW+DW/2)+'px;"><div class="g-today-lbl">Hoy</div></div>';
+        }}
+        h+='</div>';
+      }});
+      h+='</div>';
+      el.innerHTML=h;
+
+      const tip=document.getElementById('gTip');
+      el.querySelectorAll('.g-bar').forEach(bar=>{{
+        bar.addEventListener('mouseenter',e=>{{
+          const p=bar.dataset.tip.split('|');
+          const sm={{completada:'Completada',activa:'En proceso','en-riesgo':'En riesgo',vencida:'Vencida',pendiente:'Pendiente'}};
+          tip.innerHTML='<div style="font-weight:500;margin-bottom:3px">'+p[0]+'</div><div style="color:var(--color-text-secondary)">'+p[1]+'</div><div style="color:var(--color-text-secondary)">'+p[2]+'</div><div style="color:var(--color-text-secondary)">'+p[3]+'</div><div style="margin-top:3px;font-weight:500">'+(sm[p[4]]||p[4])+'</div>';
+          tip.style.display='block';
+          tip.style.left=Math.min(e.pageX+10,window.innerWidth-260)+'px';
+          tip.style.top=(e.pageY-90)+'px';
+        }});
+        bar.addEventListener('mouseleave',()=>{{tip.style.display='none';}});
+      }});
+    }}
+
+    function render(){{renderTabs();renderCards();renderGantt();}}
+    render();
+    </script>
+    """
+
+    import streamlit.components.v1 as components
+    # Calculate height based on activities
+    all_acts_count = sum(len(i_avs) for p in active_instances
+                        for i_avs in [[a for a in avances if a.get("ID_Instancia") == p.get("ID_Instancia")]])
+    chart_height = max(500, all_acts_count * 36 + 200)
+    components.html(gantt_html, height=chart_height, scrolling=True)
+
+
+# ════════════════════════════════════════════
 # MAIN ROUTING
 # ════════════════════════════════════════════
 def main():
@@ -1603,6 +1948,8 @@ def main():
         page_admin()
     elif page == "cambiar_pwd":
         page_cambiar_pwd()
+    elif page == "calendario":
+        page_calendario()
     else:
         page_inicio()
 
