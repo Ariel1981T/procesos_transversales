@@ -549,12 +549,23 @@ def complete_activity(task, inst):
     sm.log_action(user["Nombre"], "Completar actividad", "Actividad",
                   task["ID_Avance"], f"Act #{num_act} de {inst_id}")
 
+    # Find manager email for notifications
+    gerente_nombre = inst.get("Gerente_Responsable", "")
+    gerente_user = None
+    all_users = sm.get_all_records(C.HOJA_USUARIOS)
+    for u in all_users:
+        if u.get("Nombre", "") == gerente_nombre:
+            gerente_user = u
+            break
+    gerente_email = gerente_user.get("Correo", "") if gerente_user else ""
+
     # Notify manager
-    notif.notify_task_completed(
-        inst.get("Gerente_Responsable", ""), inst.get("Gerente_Responsable", ""),
-        task.get("Actividad", ""), user.get("Nombre", ""),
-        inst.get("Nombre_Instancia", "")
-    )
+    if gerente_email:
+        notif.notify_task_completed(
+            gerente_email, gerente_nombre,
+            task.get("Actividad", ""), user.get("Nombre", ""),
+            inst.get("Nombre_Instancia", "")
+        )
 
     # Activate next activity
     all_avances = sm.get_all_records(C.HOJA_AVANCE)
@@ -591,10 +602,11 @@ def complete_activity(task, inst):
     if completed >= total:
         updates["Estatus"] = "Completado"
         updates["Fecha_Real_Fin"] = fecha_cierre
-        notif.notify_process_completed(
-            inst.get("Gerente_Responsable", ""), inst.get("Gerente_Responsable", ""),
-            inst.get("Nombre_Instancia", ""), inst_id
-        )
+        if gerente_email:
+            notif.notify_process_completed(
+                gerente_email, gerente_nombre,
+                inst.get("Nombre_Instancia", ""), inst_id
+            )
     sm.update_row_by_id(C.HOJA_INSTANCIAS, "ID_Instancia", inst_id, updates)
 
     st.success("✅ Actividad completada exitosamente.")
@@ -1479,7 +1491,7 @@ def pm_usuarios():
 def page_admin():
     st.markdown('<div class="section-header">⚙️ Administración del Sistema</div>', unsafe_allow_html=True)
 
-    tab1, tab2 = st.tabs(["📋 Log del Sistema", "📥 Plantilla Excel Modelo"])
+    tab1, tab2, tab3 = st.tabs(["📋 Log del Sistema", "📥 Plantilla Excel Modelo", "📧 Prueba de Correo"])
 
     with tab1:
         logs = sm.get_all_records(C.HOJA_LOG)
@@ -1494,6 +1506,18 @@ def page_admin():
         st.markdown("Descarga la plantilla Excel modelo para que los gerentes llenen sus procesos.")
         if st.button("📥 Generar Plantilla Modelo"):
             generate_template_excel()
+
+    with tab3:
+        st.markdown("Envía un correo de prueba para verificar que el motor de notificaciones funciona correctamente.")
+        with st.form("test_email_form"):
+            test_to = st.text_input("📧 Correo destino", value=st.session_state.user.get("Correo", ""))
+            test_submit = st.form_submit_button("📧 Enviar correo de prueba", type="primary")
+        if test_submit and test_to:
+            result = notif.test_email(test_to)
+            if result:
+                st.success(f"✅ Correo de prueba enviado a {test_to}. Revisa tu bandeja de entrada.")
+            else:
+                st.error("❌ No se pudo enviar el correo. Revisa los mensajes de error arriba.")
 
 
 def generate_template_excel():
