@@ -231,6 +231,12 @@ def find_user_by_email(email):
     return None
 
 
+def get_user_phone(email):
+    """Get phone number for a user by email."""
+    user = find_user_by_email(email)
+    return str(user.get("Telefono", "")) if user else ""
+
+
 def validate_domain(email):
     return any(email.strip().lower().endswith(d) for d in C.DOMINIOS_PERMITIDOS)
 
