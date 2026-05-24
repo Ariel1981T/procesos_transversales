@@ -6,16 +6,19 @@ from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 import streamlit as st
 
-APP_URL = "https://imemsa-procesos.streamlit.app"
+APP_URL = "https://procesostransversales.streamlit.app"
 
 
 def _get_smtp():
-    return st.secrets.get("smtp_email", ""), st.secrets.get("smtp_password", "")
+    email = st.secrets.get("smtp_email", "")
+    password = st.secrets.get("smtp_password", "")
+    return email, password
 
 
 def _send_email(to_email, subject, html_body):
     sender, password = _get_smtp()
     if not sender or not password:
+        st.warning("⚠️ Credenciales SMTP no configuradas en Secrets (smtp_email / smtp_password).")
         return False
     try:
         msg = MIMEMultipart("alternative")
@@ -27,9 +30,26 @@ def _send_email(to_email, subject, html_body):
             server.login(sender, password)
             server.sendmail(sender, to_email, msg.as_string())
         return True
-    except Exception as e:
-        st.warning(f"Error al enviar correo a {to_email}: {e}")
+    except smtplib.SMTPAuthenticationError:
+        st.error(f"❌ Error de autenticación SMTP. Verifica smtp_email y smtp_password en Secrets.")
         return False
+    except smtplib.SMTPRecipientsRefused:
+        st.warning(f"⚠️ Correo rechazado para: {to_email}")
+        return False
+    except Exception as e:
+        st.warning(f"⚠️ Error al enviar correo a {to_email}: {type(e).__name__}: {e}")
+        return False
+
+
+def test_email(to_email):
+    """Send a test email to verify SMTP configuration."""
+    subject = "✅ Prueba de correo — IMEMSA Procesos Transversales"
+    body = _base_template("Prueba Exitosa", f"""
+    <p>Este es un correo de prueba del sistema de notificaciones.</p>
+    <p>Si recibes este mensaje, el motor de correos está funcionando correctamente.</p>
+    <p><strong>Destinatario:</strong> {to_email}</p>
+    """)
+    return _send_email(to_email, subject, body)
 
 
 def _base_template(title, body_html):
