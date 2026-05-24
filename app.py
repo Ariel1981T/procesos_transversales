@@ -181,8 +181,8 @@ def login_page():
         st.markdown("""
         <p style="text-align:center;margin-bottom:18px;font-size:14px;letter-spacing:1px;
             color:#c8d8f0;line-height:1.6;font-family:'Rajdhani',sans-serif;">
-            Sistema de Seguimiento ·
-            <span style="color:#ffffff;font-weight:600;">Procesos Transversales</span><br>
+            Sistema de Seguimiento y Control·
+            <span style="color:#ffffff;font-weight:600;"> </span><br>
             Grupo IMEMSA
         </p>
         """, unsafe_allow_html=True)
