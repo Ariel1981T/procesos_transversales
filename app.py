@@ -838,47 +838,47 @@ def launch_instance_form():
                 tpl.get("ID_Autorizacion", "Plantilla aprobada"), "", ""
             ])
 
-        # Create avance records
-        for act in tpl_acts:
-            num = int(act.get("Numero", 0))
-            avance_id = f"AV-{inst_id}-{num:02d}"
+            # Create avance records
+            for act in tpl_acts:
+                num = int(act.get("Numero", 0))
+                avance_id = f"AV-{inst_id}-{num:02d}"
 
-            if num == 1:
-                f_inicio = now.strftime("%Y-%m-%d")
-                dias = int(act.get("Dias_Teoricos", 1))
-                f_limite = sm.add_business_days(now.date(), dias).strftime("%Y-%m-%d")
-                estatus = "Activa"
-            else:
-                f_inicio = ""
-                f_limite = ""
-                estatus = "Pendiente"
+                if num == 1:
+                    f_inicio = now.strftime("%Y-%m-%d")
+                    dias = int(act.get("Dias_Teoricos", 1))
+                    f_limite = sm.add_business_days(now.date(), dias).strftime("%Y-%m-%d")
+                    estatus = "Activa"
+                else:
+                    f_inicio = ""
+                    f_limite = ""
+                    estatus = "Pendiente"
 
-            sm.append_row(C.HOJA_AVANCE, [
-                avance_id, inst_id, num, act.get("Actividad", ""), act.get("Fase", ""),
-                act.get("Responsable", ""), act.get("Correo", ""),
-                act.get("Dias_Teoricos", 1), f_inicio, f_limite, "",
-                estatus, "", "", act.get("Evidencia_Requerida", "No"), "No"
-            ])
+                sm.append_row(C.HOJA_AVANCE, [
+                    avance_id, inst_id, num, act.get("Actividad", ""), act.get("Fase", ""),
+                    act.get("Responsable", ""), act.get("Correo", ""),
+                    act.get("Dias_Teoricos", 1), f_inicio, f_limite, "",
+                    estatus, "", "", act.get("Evidencia_Requerida", "No"), "No"
+                ])
 
-        # Notify first responsible
-        first = tpl_acts[0]
-        dias_first = int(first.get("Dias_Teoricos", 1))
-        f_limite_first = sm.add_business_days(now.date(), dias_first).strftime("%Y-%m-%d")
-        notif.notify_task_activated(
-            first.get("Correo", ""), first.get("Responsable", ""),
-            nombre_inst, first.get("Actividad", ""), dias_first, f_limite_first
-        )
+            # Notify first responsible
+            first = tpl_acts[0]
+            dias_first = int(first.get("Dias_Teoricos", 1))
+            f_limite_first = sm.add_business_days(now.date(), dias_first).strftime("%Y-%m-%d")
+            notif.notify_task_activated(
+                first.get("Correo", ""), first.get("Responsable", ""),
+                nombre_inst, first.get("Actividad", ""), dias_first, f_limite_first
+            )
 
-        # Update template usage count
-        veces = int(tpl.get("Veces_Utilizada", 0)) + 1
-        sm.update_cell_by_id(C.HOJA_PLANTILLAS, "ID_Plantilla", tpl_id, "Veces_Utilizada", veces)
+            # Update template usage count
+            veces = int(tpl.get("Veces_Utilizada", 0)) + 1
+            sm.update_cell_by_id(C.HOJA_PLANTILLAS, "ID_Plantilla", tpl_id, "Veces_Utilizada", veces)
 
-        sm.log_action(user["Nombre"], "Lanzar instancia", "Instancia", inst_id, nombre_inst)
+            sm.log_action(user["Nombre"], "Lanzar instancia", "Instancia", inst_id, nombre_inst)
 
-        st.session_state.show_launch = False
-        st.session_state.selected_template = None
-        st.success(f"✅ Proceso lanzado exitosamente: {inst_id}")
-        st.rerun()
+            st.session_state.show_launch = False
+            st.session_state.selected_template = None
+            st.success(f"✅ Proceso lanzado exitosamente: {inst_id}")
+            st.rerun()
 
     with col2:
         if st.button("❌ Cancelar", use_container_width=True):
