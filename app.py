@@ -50,9 +50,13 @@ def login_page():
     with col2:
         st.markdown("---")
         email = st.text_input("📧 Correo institucional", placeholder="tucorreo@imemsa.com.mx")
+        password = st.text_input("🔑 Contraseña", type="password", placeholder="Tu contraseña")
         if st.button("🔐 Iniciar Sesión", use_container_width=True, type="primary"):
             if not email:
                 st.error("Ingresa tu correo electrónico.")
+                return
+            if not password:
+                st.error("Ingresa tu contraseña.")
                 return
             if not sm.validate_domain(email):
                 st.error(f"Dominio no autorizado. Dominios permitidos: {', '.join(C.DOMINIOS_PERMITIDOS)}")
@@ -63,6 +67,9 @@ def login_page():
                 return
             if str(user.get("Activo", "Sí")).strip().lower() in ["no", "false", "0"]:
                 st.error("Tu cuenta está desactivada. Contacta al Administrador.")
+                return
+            if user.get("Password", "") != password:
+                st.error("Contraseña incorrecta.")
                 return
             st.session_state.logged_in = True
             st.session_state.user = user
@@ -97,7 +104,7 @@ def navigation():
     if rol == "Admin":
         pages["admin"] = "⚙️ Admin"
 
-    cols = st.columns(len(pages) + 1)
+    cols = st.columns(len(pages) + 2)
     for i, (key, label) in enumerate(pages.items()):
         if cols[i].button(label, key=f"nav_{key}", use_container_width=True,
                           type="primary" if st.session_state.page == key else "secondary"):
@@ -105,6 +112,10 @@ def navigation():
             st.session_state.selected_instance = None
             st.session_state.selected_template = None
             st.rerun()
+    if cols[-2].button("🔑 Contraseña", key="nav_pwd", use_container_width=True,
+                       type="primary" if st.session_state.page == "cambiar_pwd" else "secondary"):
+        st.session_state.page = "cambiar_pwd"
+        st.rerun()
     if cols[-1].button("🚪 Salir", use_container_width=True):
         for k in DEFAULTS:
             st.session_state[k] = DEFAULTS[k]
@@ -574,7 +585,7 @@ def upload_template_form():
         # Send welcome emails to new users
         for nu in new_users:
             first_act = df.iloc[0]["Actividad"] if len(df) > 0 else ""
-            notif.notify_welcome(nu["Correo"], nu["Nombre"], nombre, first_act)
+            notif.notify_welcome(nu["Correo"], nu["Nombre"], nombre, first_act, nu.get("Password", ""))
 
         st.session_state.show_upload = False
         st.success(f"✅ Plantilla '{nombre}' creada exitosamente con ID {tpl_id}")
@@ -1102,7 +1113,9 @@ def pm_usuarios():
     users = sm.get_all_records(C.HOJA_USUARIOS)
     if users:
         df = pd.DataFrame(users)
-        st.dataframe(df, use_container_width=True, hide_index=True)
+        # Hide password column in display
+        display_cols = [c for c in df.columns if c != "Password"]
+        st.dataframe(df[display_cols], use_container_width=True, hide_index=True)
 
     st.markdown("### Agregar Usuario")
     with st.form("add_user"):
@@ -1124,10 +1137,41 @@ def pm_usuarios():
             st.error("El correo ya está registrado.")
         else:
             uid = sm.get_next_id("USR-", C.HOJA_USUARIOS, "ID_Usuario")
-            sm.append_row(C.HOJA_USUARIOS, [uid, nombre, correo, telefono, area, rol, "Sí"])
+            pwd = sm.generate_password()
+            sm.append_row(C.HOJA_USUARIOS, [uid, nombre, correo, telefono, area, rol, "Sí", pwd])
             sm.log_action(st.session_state.user["Nombre"], "Agregar usuario", "Usuario", uid, nombre)
             st.success(f"✅ Usuario {nombre} agregado ({uid}).")
-            st.rerun()
+            st.markdown(f"""
+            <div class="info-box">
+                🔑 <strong>Contraseña generada:</strong> <code>{pwd}</code><br>
+                📧 <strong>Correo:</strong> {correo}<br>
+                <em>Comparte esta contraseña al usuario de forma segura.</em>
+            </div>
+            """, unsafe_allow_html=True)
+
+    # Reset password section
+    st.markdown("### 🔄 Restablecer Contraseña")
+    with st.form("reset_pwd"):
+        reset_email = st.text_input("Correo del usuario")
+        reset_submit = st.form_submit_button("🔄 Generar nueva contraseña")
+
+    if reset_submit and reset_email:
+        target_user = sm.find_user_by_email(reset_email)
+        if not target_user:
+            st.error("Correo no encontrado.")
+        else:
+            new_pwd = sm.generate_password()
+            sm.update_cell_by_id(C.HOJA_USUARIOS, "ID_Usuario",
+                                  target_user["ID_Usuario"], "Password", new_pwd)
+            sm.log_action(st.session_state.user["Nombre"], "Reset contraseña",
+                          "Usuario", target_user["ID_Usuario"], reset_email)
+            st.success(f"✅ Nueva contraseña generada para {target_user.get('Nombre', '')}.")
+            st.markdown(f"""
+            <div class="info-box">
+                🔑 <strong>Nueva contraseña:</strong> <code>{new_pwd}</code><br>
+                <em>Comparte esta contraseña al usuario de forma segura.</em>
+            </div>
+            """, unsafe_allow_html=True)
 
 
 # ════════════════════════════════════════════
@@ -1184,6 +1228,37 @@ def generate_template_excel():
 
 
 # ════════════════════════════════════════════
+# PAGE: CAMBIAR CONTRASEÑA
+# ════════════════════════════════════════════
+def page_cambiar_pwd():
+    st.markdown('<div class="section-title">🔑 Cambiar Contraseña</div>', unsafe_allow_html=True)
+
+    user = st.session_state.user
+    with st.form("change_pwd"):
+        current_pwd = st.text_input("🔒 Contraseña actual", type="password")
+        new_pwd = st.text_input("🔑 Nueva contraseña", type="password")
+        confirm_pwd = st.text_input("🔑 Confirmar nueva contraseña", type="password")
+        submit = st.form_submit_button("✅ Cambiar Contraseña", type="primary")
+
+    if submit:
+        if not current_pwd or not new_pwd or not confirm_pwd:
+            st.error("Completa todos los campos.")
+        elif user.get("Password", "") != current_pwd:
+            st.error("La contraseña actual es incorrecta.")
+        elif len(new_pwd) < 6:
+            st.error("La nueva contraseña debe tener al menos 6 caracteres.")
+        elif new_pwd != confirm_pwd:
+            st.error("Las contraseñas no coinciden.")
+        else:
+            sm.update_cell_by_id(C.HOJA_USUARIOS, "ID_Usuario",
+                                  user["ID_Usuario"], "Password", new_pwd)
+            st.session_state.user["Password"] = new_pwd
+            sm.log_action(user["Nombre"], "Cambiar contraseña", "Usuario",
+                          user["ID_Usuario"], "")
+            st.success("✅ Contraseña cambiada exitosamente.")
+
+
+# ════════════════════════════════════════════
 # MAIN ROUTING
 # ════════════════════════════════════════════
 def main():
@@ -1209,6 +1284,8 @@ def main():
         page_pm_panel()
     elif page == "admin":
         page_admin()
+    elif page == "cambiar_pwd":
+        page_cambiar_pwd()
     else:
         page_inicio()
 
