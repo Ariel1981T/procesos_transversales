@@ -12,11 +12,13 @@ import sheets_manager as sm
 import notifications as notif
 from styles import get_css, badge, avatar, metric_card, progress_bar
 
+from styles import get_css, badge, avatar, metric_card, progress_bar, days_badge, sem_dot
+
 st.set_page_config(
-    page_title="IMEMSA — Procesos Transversales",
+    page_title="IMEMSA · Procesos Transversales",
     page_icon="📋",
     layout="wide",
-    initial_sidebar_state="collapsed",
+    initial_sidebar_state="expanded",
 )
 st.markdown(get_css(), unsafe_allow_html=True)
 
@@ -38,11 +40,15 @@ for k, v in DEFAULTS.items():
 # ════════════════════════════════════════════
 def login_page():
     st.markdown("""
-    <div style="text-align:center;margin-top:3rem;">
-        <h1 style="font-size:2.5rem;font-weight:800;color:#0D2B6E;margin-bottom:0;">IMEMSA</h1>
-        <p style="color:#C41E2E;font-size:1rem;font-weight:600;margin-top:0.2rem;">
-            Plataforma de Procesos Transversales</p>
-        <p style="color:#666;font-size:0.9rem;">Grupo IMEMSA — Control y Seguimiento</p>
+    <div style="text-align:center;margin-top:2rem;margin-bottom:2rem;">
+        <div style="display:inline-block;background:#0D2B6E;border-radius:12px;padding:18px 32px 14px;">
+            <div style="font-family:Barlow Condensed,sans-serif;font-size:2.4rem;
+                font-weight:800;color:#fff;letter-spacing:1px;">IMEMSA</div>
+            <div style="font-family:Source Sans 3,sans-serif;font-size:.72rem;
+                font-weight:600;color:#8EA8D8;letter-spacing:2.5px;margin-top:2px;">
+                PROCESOS TRANSVERSALES</div>
+            <div style="height:2px;background:#C41E2E;border-radius:1px;margin-top:8px;"></div>
+        </div>
     </div>
     """, unsafe_allow_html=True)
 
@@ -79,15 +85,22 @@ def login_page():
 
 def header():
     user = st.session_state.user
-    role_emoji = {"PM": "👔", "Gerente": "🏭", "Responsable": "👤", "Admin": "⚙️"}
-    emoji = role_emoji.get(user.get("Rol", ""), "👤")
+    nombre = user.get('Nombre', '')
+    rol = user.get('Rol', '')
     st.markdown(f"""
-    <div class="imemsa-header">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;">
         <div>
-            <h1>📋 Procesos Transversales</h1>
-            <div class="subtitle">Grupo IMEMSA — Control y Seguimiento</div>
+            <span class="section-header" style="border-bottom:none;margin-bottom:0;">
+                📋 Procesos Transversales
+            </span>
         </div>
-        <div class="user-badge">{emoji} {user.get('Nombre', '')} — {user.get('Rol', '')}</div>
+        <div style="display:flex;align-items:center;gap:10px;">
+            {avatar(nombre)}
+            <div>
+                <div style="font-weight:700;color:#0D2B6E;font-size:.95rem;">{nombre}</div>
+                <div style="font-size:.75rem;color:#8592A3;">{rol}</div>
+            </div>
+        </div>
     </div>
     """, unsafe_allow_html=True)
 
@@ -95,31 +108,65 @@ def header():
 def navigation():
     user = st.session_state.user
     rol = user.get("Rol", "Responsable")
-    pages = {"inicio": "🏠 Inicio", "mis_tareas": "📥 Mis Tareas"}
-    if rol in ["Gerente", "PM", "Admin"]:
-        pages["biblioteca"] = "📚 Biblioteca"
-        pages["mis_procesos"] = "📊 Mis Procesos"
-    if rol in ["PM", "Admin"]:
-        pages["pm_panel"] = "👔 Panel PM"
-    if rol == "Admin":
-        pages["admin"] = "⚙️ Admin"
 
-    cols = st.columns(len(pages) + 2)
-    for i, (key, label) in enumerate(pages.items()):
-        if cols[i].button(label, key=f"nav_{key}", use_container_width=True,
-                          type="primary" if st.session_state.page == key else "secondary"):
-            st.session_state.page = key
+    with st.sidebar:
+        st.markdown(
+            '<div style="padding:16px 16px 10px 16px;text-align:center;">'
+            '<div style="font-family:Barlow Condensed,sans-serif;font-size:1.8rem;'
+            'font-weight:800;color:#fff;letter-spacing:1px;">IMEMSA</div>'
+            '<div style="font-family:Source Sans 3,sans-serif;font-size:.7rem;'
+            'font-weight:600;color:#8EA8D8;letter-spacing:2.5px;margin-top:2px;">'
+            'PROCESOS TRANSVERSALES</div>'
+            '<div style="height:2px;background:#C41E2E;border-radius:1px;margin-top:10px;"></div>'
+            '</div>', unsafe_allow_html=True)
+
+        st.markdown('<div class="sidebar-divider"></div>', unsafe_allow_html=True)
+
+        if st.button("🏠  Inicio", use_container_width=True, key="nav_inicio"):
+            st.session_state.page = "inicio"
             st.session_state.selected_instance = None
-            st.session_state.selected_template = None
             st.rerun()
-    if cols[-2].button("🔑 Contraseña", key="nav_pwd", use_container_width=True,
-                       type="primary" if st.session_state.page == "cambiar_pwd" else "secondary"):
-        st.session_state.page = "cambiar_pwd"
-        st.rerun()
-    if cols[-1].button("🚪 Salir", use_container_width=True):
-        for k in DEFAULTS:
-            st.session_state[k] = DEFAULTS[k]
-        st.rerun()
+
+        if st.button("📥  Mis Tareas", use_container_width=True, key="nav_mis_tareas"):
+            st.session_state.page = "mis_tareas"
+            st.rerun()
+
+        if rol in ["Gerente", "PM", "Admin"]:
+            st.markdown('<div class="sidebar-divider"></div>', unsafe_allow_html=True)
+            st.markdown('<div style="font-size:.7rem;font-weight:600;letter-spacing:1.5px;'
+                        'color:#8EA8D8;padding:0 12px;">GESTIÓN</div>', unsafe_allow_html=True)
+
+            if st.button("📚  Biblioteca", use_container_width=True, key="nav_biblioteca"):
+                st.session_state.page = "biblioteca"
+                st.rerun()
+            if st.button("📊  Mis Procesos", use_container_width=True, key="nav_mis_procesos"):
+                st.session_state.page = "mis_procesos"
+                st.rerun()
+
+        if rol in ["PM", "Admin"]:
+            st.markdown('<div class="sidebar-divider"></div>', unsafe_allow_html=True)
+            st.markdown('<div style="font-size:.7rem;font-weight:600;letter-spacing:1.5px;'
+                        'color:#8EA8D8;padding:0 12px;">ADMINISTRACIÓN</div>', unsafe_allow_html=True)
+
+            if st.button("👔  Panel PM", use_container_width=True, key="nav_pm_panel"):
+                st.session_state.page = "pm_panel"
+                st.rerun()
+
+        if rol == "Admin":
+            if st.button("⚙️  Admin", use_container_width=True, key="nav_admin"):
+                st.session_state.page = "admin"
+                st.rerun()
+
+        st.markdown('<div class="sidebar-divider"></div>', unsafe_allow_html=True)
+
+        if st.button("🔑  Cambiar Contraseña", use_container_width=True, key="nav_pwd"):
+            st.session_state.page = "cambiar_pwd"
+            st.rerun()
+
+        if st.button("🚪  Cerrar Sesión", use_container_width=True, key="nav_salir"):
+            for k in DEFAULTS:
+                st.session_state[k] = DEFAULTS[k]
+            st.rerun()
 
 
 # ════════════════════════════════════════════
@@ -129,7 +176,7 @@ def page_inicio():
     user = st.session_state.user
     rol = user.get("Rol", "Responsable")
     email = user.get("Correo", "").strip().lower()
-    st.markdown('<div class="section-title">📊 Dashboard General</div>', unsafe_allow_html=True)
+    st.markdown('<div class="section-header">📊 Dashboard General</div>', unsafe_allow_html=True)
 
     instances = sm.get_all_records(C.HOJA_INSTANCIAS)
     avances = sm.get_all_records(C.HOJA_AVANCE)
@@ -163,7 +210,7 @@ def page_inicio():
         st.markdown(metric_card(len(overdue_activities), "Actividades Vencidas", "red"), unsafe_allow_html=True)
 
     if active:
-        st.markdown('<div class="section-title">📋 Procesos Activos</div>', unsafe_allow_html=True)
+        st.markdown('<div class="section-header">📋 Procesos Activos</div>', unsafe_allow_html=True)
         for inst in active:
             pct = inst.get("Porcentaje_Avance", 0)
             try:
@@ -194,7 +241,7 @@ def page_inicio():
 def page_mis_tareas():
     user = st.session_state.user
     email = user.get("Correo", "").strip().lower()
-    st.markdown('<div class="section-title">📥 Mis Tareas Pendientes</div>', unsafe_allow_html=True)
+    st.markdown('<div class="section-header">📥 Mis Tareas Pendientes</div>', unsafe_allow_html=True)
 
     avances = sm.get_all_records(C.HOJA_AVANCE)
     instances = sm.get_all_records(C.HOJA_INSTANCIAS)
@@ -415,7 +462,7 @@ def complete_activity(task, inst):
 # PAGE: BIBLIOTECA DE PLANTILLAS
 # ════════════════════════════════════════════
 def page_biblioteca():
-    st.markdown('<div class="section-title">📚 Biblioteca de Plantillas</div>', unsafe_allow_html=True)
+    st.markdown('<div class="section-header">📚 Biblioteca de Plantillas</div>', unsafe_allow_html=True)
 
     col1, col2 = st.columns([3, 1])
     with col2:
@@ -459,7 +506,7 @@ def page_biblioteca():
 
 
 def upload_template_form():
-    st.markdown('<div class="section-title">📤 Crear Nueva Plantilla</div>', unsafe_allow_html=True)
+    st.markdown('<div class="section-header">📤 Crear Nueva Plantilla</div>', unsafe_allow_html=True)
 
     with st.form("upload_form"):
         auth_code = st.text_input("🔑 Número de Confirmación del PM", placeholder="PT-2026-001")
@@ -600,7 +647,7 @@ def launch_instance_form():
         st.error("Plantilla no encontrada.")
         return
 
-    st.markdown(f'<div class="section-title">🚀 Lanzar Instancia de: {tpl.get("Nombre", "")}</div>',
+    st.markdown(f'<div class="section-header">🚀 Lanzar Instancia de: {tpl.get("Nombre", "")}</div>',
                 unsafe_allow_html=True)
 
     # Show template summary
@@ -708,7 +755,7 @@ def launch_instance_form():
 # ════════════════════════════════════════════
 def page_mis_procesos():
     user = st.session_state.user
-    st.markdown('<div class="section-title">📊 Mis Procesos</div>', unsafe_allow_html=True)
+    st.markdown('<div class="section-header">📊 Mis Procesos</div>', unsafe_allow_html=True)
 
     instances = sm.get_all_records(C.HOJA_INSTANCIAS)
     rol = user.get("Rol", "")
@@ -860,7 +907,7 @@ def page_ver_instancia():
             st.markdown(metric_card(f"${float(inst.get('Importe',0)):,.2f}", "Importe"), unsafe_allow_html=True)
 
     # Activities grouped by phase
-    st.markdown('<div class="section-title">🔢 Actividades del Proceso</div>', unsafe_allow_html=True)
+    st.markdown('<div class="section-header">🔢 Actividades del Proceso</div>', unsafe_allow_html=True)
 
     current_phase = ""
     for act in inst_avances:
@@ -930,7 +977,7 @@ def page_ver_instancia():
 
     # Comments section
     if inst_comentarios:
-        st.markdown('<div class="section-title">💬 Comentarios</div>', unsafe_allow_html=True)
+        st.markdown('<div class="section-header">💬 Comentarios</div>', unsafe_allow_html=True)
         for com in inst_comentarios:
             st.markdown(f"""
             <div style="background:#f8f9fa;padding:0.6rem 1rem;border-radius:8px;margin-bottom:0.5rem;font-size:0.85rem;">
@@ -976,7 +1023,7 @@ def export_instance_to_excel(inst, avances, evidencias, comentarios):
 # PAGE: PANEL DEL PM
 # ════════════════════════════════════════════
 def page_pm_panel():
-    st.markdown('<div class="section-title">👔 Panel del Project Manager</div>', unsafe_allow_html=True)
+    st.markdown('<div class="section-header">👔 Panel del Project Manager</div>', unsafe_allow_html=True)
 
     tab1, tab2, tab3 = st.tabs(["🔑 Autorizaciones", "📊 Dashboard Global", "👥 Usuarios"])
 
@@ -1178,7 +1225,7 @@ def pm_usuarios():
 # PAGE: ADMIN
 # ════════════════════════════════════════════
 def page_admin():
-    st.markdown('<div class="section-title">⚙️ Administración del Sistema</div>', unsafe_allow_html=True)
+    st.markdown('<div class="section-header">⚙️ Administración del Sistema</div>', unsafe_allow_html=True)
 
     tab1, tab2, tab3 = st.tabs(["🗄️ Inicializar BD", "📋 Log del Sistema", "📥 Plantilla Excel Modelo"])
 
@@ -1231,7 +1278,7 @@ def generate_template_excel():
 # PAGE: CAMBIAR CONTRASEÑA
 # ════════════════════════════════════════════
 def page_cambiar_pwd():
-    st.markdown('<div class="section-title">🔑 Cambiar Contraseña</div>', unsafe_allow_html=True)
+    st.markdown('<div class="section-header">🔑 Cambiar Contraseña</div>', unsafe_allow_html=True)
 
     user = st.session_state.user
     with st.form("change_pwd"):
