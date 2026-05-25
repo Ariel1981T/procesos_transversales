@@ -1255,26 +1255,28 @@ def _render_activity_row(act, inst, inst_evidencias, inst_comentarios, user):
                 name = ev.get("Nombre_Archivo", "archivo")
                 subido = ev.get("Subido_Por", "")
                 fecha = ev.get("Fecha_Subida", "")
+                # JavaScript fetch + blob download
+                safe_name = name.replace("'", "\\'")
                 st.markdown(
                     f'<div style="padding:6px 10px;border-left:3px solid #0D2B6E;'
-                    f'margin-bottom:2px;background:#F8FAFF;border-radius:0 6px 6px 0;">'
+                    f'margin-bottom:6px;background:#F8FAFF;border-radius:0 6px 6px 0;'
+                    f'display:flex;justify-content:space-between;align-items:center;">'
+                    f'<div>'
                     f'<span style="font-size:.85rem;font-weight:600;color:#0D2B6E;">📄 {name}</span>'
-                    f'<span style="font-size:.72rem;color:#6B7280;margin-left:8px;">'
-                    f'Subido por {subido} · {fecha}</span></div>',
+                    f'<br><span style="font-size:.72rem;color:#6B7280;">'
+                    f'Subido por {subido} · {fecha}</span>'
+                    f'</div>'
+                    f'<a href="{url}" download="{name}" target="_blank" '
+                    f'onclick="event.preventDefault();fetch(\'{url}\')'
+                    f'.then(r=>r.blob()).then(b=>{{const a=document.createElement(\'a\');'
+                    f'a.href=URL.createObjectURL(b);a.download=\'{safe_name}\';'
+                    f'a.click();URL.revokeObjectURL(a.href);}})" '
+                    f'style="font-size:.78rem;font-weight:600;color:#fff;background:#0D2B6E;'
+                    f'padding:4px 12px;border-radius:6px;text-decoration:none;white-space:nowrap;'
+                    f'cursor:pointer;">⬇️ Descargar</a>'
+                    f'</div>',
                     unsafe_allow_html=True,
                 )
-                try:
-                    import urllib.request
-                    file_data = urllib.request.urlopen(url).read()
-                    st.download_button(
-                        label=f"⬇️ Descargar {name}",
-                        data=file_data,
-                        file_name=name,
-                        key=f"dl_{ev.get('ID_Evidencia', '')}_{name}",
-                    )
-                except Exception:
-                    st.markdown(f'<a href="{url}" target="_blank" style="font-size:.82rem;color:#0D2B6E;">🔗 Abrir archivo</a>',
-                                unsafe_allow_html=True)
         else:
             st.caption("Sin evidencias adjuntas.")
 
