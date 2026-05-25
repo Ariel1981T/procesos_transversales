@@ -1252,13 +1252,15 @@ def _render_activity_row(act, inst, inst_evidencias, inst_comentarios, user):
         if act_evidencias:
             for ev in act_evidencias:
                 url = ev.get("URL_Cloudinary", "")
+                # Force download by adding fl_attachment to Cloudinary URL
+                dl_url = url.replace("/upload/", "/upload/fl_attachment/") if "/upload/" in url else url
                 name = ev.get("Nombre_Archivo", "archivo")
                 subido = ev.get("Subido_Por", "")
                 fecha = ev.get("Fecha_Subida", "")
                 st.markdown(
                     f'<div style="padding:6px 10px;border-left:3px solid #0D2B6E;'
                     f'margin-bottom:6px;background:#F8FAFF;border-radius:0 6px 6px 0;">'
-                    f'<a href="{url}" target="_blank" style="font-size:.85rem;font-weight:600;color:#0D2B6E;">📄 {name}</a>'
+                    f'<a href="{dl_url}" style="font-size:.85rem;font-weight:600;color:#0D2B6E;">⬇️ {name}</a>'
                     f'<span style="font-size:.72rem;color:#6B7280;margin-left:8px;">'
                     f'Subido por {subido} · {fecha}</span></div>',
                     unsafe_allow_html=True,
