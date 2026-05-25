@@ -1250,13 +1250,23 @@ def _render_activity_row(act, inst, inst_evidencias, inst_comentarios, user):
     ev_label = f"📸  Evidencias  ({len(act_evidencias)})" if act_evidencias else "📸  Evidencias"
     with st.expander(ev_label, expanded=False):
         if act_evidencias:
+            import cloudinary
+            import cloudinary.utils
+            cloudinary.config(
+                cloud_name=st.secrets["cloudinary"]["cloud_name"],
+                api_key=st.secrets["cloudinary"]["api_key"],
+                api_secret=st.secrets["cloudinary"]["api_secret"]
+            )
             for ev in act_evidencias:
-                url = ev.get("URL_Cloudinary", "")
+                public_id = ev.get("Public_ID", "")
                 name = ev.get("Nombre_Archivo", "archivo")
                 subido = ev.get("Subido_Por", "")
                 fecha = ev.get("Fecha_Subida", "")
-                # JavaScript fetch + blob download
-                safe_name = name.replace("'", "\\'")
+                # Generate download URL with fl_attachment flag
+                dl_url = cloudinary.utils.cloudinary_url(
+                    public_id, resource_type="raw",
+                    flags="attachment", secure=True
+                )[0]
                 st.markdown(
                     f'<div style="padding:6px 10px;border-left:3px solid #0D2B6E;'
                     f'margin-bottom:6px;background:#F8FAFF;border-radius:0 6px 6px 0;'
@@ -1266,14 +1276,10 @@ def _render_activity_row(act, inst, inst_evidencias, inst_comentarios, user):
                     f'<br><span style="font-size:.72rem;color:#6B7280;">'
                     f'Subido por {subido} · {fecha}</span>'
                     f'</div>'
-                    f'<a href="{url}" download="{name}" target="_blank" '
-                    f'onclick="event.preventDefault();fetch(\'{url}\')'
-                    f'.then(r=>r.blob()).then(b=>{{const a=document.createElement(\'a\');'
-                    f'a.href=URL.createObjectURL(b);a.download=\'{safe_name}\';'
-                    f'a.click();URL.revokeObjectURL(a.href);}})" '
+                    f'<a href="{dl_url}" target="_blank" '
                     f'style="font-size:.78rem;font-weight:600;color:#fff;background:#0D2B6E;'
-                    f'padding:4px 12px;border-radius:6px;text-decoration:none;white-space:nowrap;'
-                    f'cursor:pointer;">⬇️ Descargar</a>'
+                    f'padding:4px 12px;border-radius:6px;text-decoration:none;white-space:nowrap;">'
+                    f'⬇️ Descargar</a>'
                     f'</div>',
                     unsafe_allow_html=True,
                 )
