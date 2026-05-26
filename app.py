@@ -16,16 +16,16 @@ from styles import get_css, badge, avatar, metric_card, progress_bar, days_badge
 
 import requests as requests_lib
 
-@st.cache_data(ttl=300, show_spinner=False)
+@st.cache_data(ttl=300, show_spinner="Descargando archivo...")
 def _fetch_file(url):
     """Download file from URL and cache the bytes."""
     try:
-        resp = requests_lib.get(url, timeout=30)
-        if resp.status_code == 200:
+        resp = requests_lib.get(url, timeout=30, allow_redirects=True)
+        if resp.status_code == 200 and len(resp.content) > 0:
             return resp.content
+        return None
     except Exception:
-        pass
-    return None
+        return None
 
 st.set_page_config(
     page_title="IMEMSA · Procesos Transversales",
@@ -1279,18 +1279,19 @@ def _render_activity_row(act, inst, inst_evidencias, inst_comentarios, user):
                     f'Subido por {subido} · {fecha}</span></div>',
                     unsafe_allow_html=True,
                 )
-                file_bytes = _fetch_file(url)
-                if file_bytes:
-                    st.download_button(
-                        label=f"⬇️ Descargar {name}",
-                        data=file_bytes,
-                        file_name=name,
-                        key=f"dl_{ev_id}",
-                    )
-                else:
-                    st.markdown(
-                        f'<a href="{url}" target="_blank" style="color:#0D2B6E;font-size:.82rem;">'
-                        f'🔗 Abrir archivo</a>', unsafe_allow_html=True)
+                if url:
+                    file_bytes = _fetch_file(url)
+                    if file_bytes and len(file_bytes) > 0:
+                        st.download_button(
+                            label=f"⬇️ Descargar {name}",
+                            data=file_bytes,
+                            file_name=name,
+                            mime="application/octet-stream",
+                            key=f"dl_{ev_id}",
+                        )
+                    else:
+                        st.warning(f"No se pudo descargar el archivo. URL: {url[:80]}...")
+                        st.link_button(f"🔗 Abrir {name} en navegador", url)
         else:
             st.caption("Sin evidencias adjuntas.")
 
