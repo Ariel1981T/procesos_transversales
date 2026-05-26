@@ -647,16 +647,11 @@ def complete_activity(task, inst):
             dias_next, fecha_limite_next
         )
 
-    # Update instance progress
-    total = len(inst_avances)
-    completed = len([a for a in inst_avances if a.get("Estatus") == "Completada"])
-    # Add 1 only if the current activity wasn't already counted (check by ID)
-    current_already_counted = any(
-        a.get("ID_Avance") == task["ID_Avance"] and a.get("Estatus") == "Completada"
-        for a in inst_avances
-    )
-    if not current_already_counted:
-        completed += 1
+    # Update instance progress - re-read fresh from DB
+    fresh_avances = sm.get_all_records(C.HOJA_AVANCE)
+    fresh_inst_avances = [a for a in fresh_avances if a["ID_Instancia"] == inst_id]
+    total = len(fresh_inst_avances)
+    completed = len([a for a in fresh_inst_avances if a.get("Estatus") == "Completada"])
     pct = int((completed / total) * 100) if total > 0 else 0
 
     updates = {"Porcentaje_Avance": pct}
