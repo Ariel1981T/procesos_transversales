@@ -14,6 +14,19 @@ from styles import get_css, badge, avatar, metric_card, progress_bar
 
 from styles import get_css, badge, avatar, metric_card, progress_bar, days_badge, sem_dot
 
+import requests as requests_lib
+
+@st.cache_data(ttl=300, show_spinner=False)
+def _fetch_file(url):
+    """Download file from URL and cache the bytes."""
+    try:
+        resp = requests_lib.get(url, timeout=30)
+        if resp.status_code == 200:
+            return resp.content
+    except Exception:
+        pass
+    return None
+
 st.set_page_config(
     page_title="IMEMSA · Procesos Transversales",
     page_icon="📋",
@@ -636,7 +649,14 @@ def complete_activity(task, inst):
 
     # Update instance progress
     total = len(inst_avances)
-    completed = len([a for a in inst_avances if a.get("Estatus") == "Completada"]) + 1
+    completed = len([a for a in inst_avances if a.get("Estatus") == "Completada"])
+    # Add 1 only if the current activity wasn't already counted (check by ID)
+    current_already_counted = any(
+        a.get("ID_Avance") == task["ID_Avance"] and a.get("Estatus") == "Completada"
+        for a in inst_avances
+    )
+    if not current_already_counted:
+        completed += 1
     pct = int((completed / total) * 100) if total > 0 else 0
 
     updates = {"Porcentaje_Avance": pct}
@@ -1264,22 +1284,18 @@ def _render_activity_row(act, inst, inst_evidencias, inst_comentarios, user):
                     f'Subido por {subido} · {fecha}</span></div>',
                     unsafe_allow_html=True,
                 )
-                import requests as req_lib
-                try:
-                    resp = req_lib.get(url, timeout=15)
-                    if resp.status_code == 200:
-                        st.download_button(
-                            label=f"⬇️ Descargar {name}",
-                            data=resp.content,
-                            file_name=name,
-                            key=f"dl_{ev_id}",
-                        )
-                    else:
-                        st.markdown(f'<a href="{url}" target="_blank" style="color:#0D2B6E;font-size:.82rem;">🔗 Abrir archivo</a>',
-                                    unsafe_allow_html=True)
-                except Exception:
-                    st.markdown(f'<a href="{url}" target="_blank" style="color:#0D2B6E;font-size:.82rem;">🔗 Abrir archivo</a>',
-                                unsafe_allow_html=True)
+                file_bytes = _fetch_file(url)
+                if file_bytes:
+                    st.download_button(
+                        label=f"⬇️ Descargar {name}",
+                        data=file_bytes,
+                        file_name=name,
+                        key=f"dl_{ev_id}",
+                    )
+                else:
+                    st.markdown(
+                        f'<a href="{url}" target="_blank" style="color:#0D2B6E;font-size:.82rem;">'
+                        f'🔗 Abrir archivo</a>', unsafe_allow_html=True)
         else:
             st.caption("Sin evidencias adjuntas.")
 
