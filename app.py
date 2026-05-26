@@ -16,29 +16,7 @@ from styles import get_css, badge, avatar, metric_card, progress_bar, days_badge
 
 import httpx
 
-@st.cache_data(ttl=300, show_spinner="Descargando archivo...")
-def _fetch_file(url):
-    """Download file from URL using httpx (available via supabase)."""
-    try:
-        with httpx.Client(follow_redirects=True, timeout=30) as client:
-            resp = client.get(url)
-            if resp.status_code == 200 and len(resp.content) > 0:
-                return resp.content
-    except Exception:
-        pass
-    # Fallback: try urllib from standard library
-    try:
-        import urllib.request
-        import ssl
-        ctx = ssl.create_default_context()
-        req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
-        with urllib.request.urlopen(req, context=ctx, timeout=30) as response:
-            data = response.read()
-            if len(data) > 0:
-                return data
-    except Exception:
-        pass
-    return None
+
 
 st.set_page_config(
     page_title="IMEMSA · Procesos Transversales",
@@ -1284,27 +1262,18 @@ def _render_activity_row(act, inst, inst_evidencias, inst_comentarios, user):
                 subido = ev.get("Subido_Por", "")
                 fecha = ev.get("Fecha_Subida", "")
                 ev_id = ev.get("ID_Evidencia", "")
-                st.markdown(
-                    f'<div style="padding:6px 10px;border-left:3px solid #0D2B6E;'
-                    f'margin-bottom:2px;background:#F8FAFF;border-radius:0 6px 6px 0;">'
-                    f'<span style="font-size:.85rem;font-weight:600;color:#0D2B6E;">📄 {name}</span>'
-                    f'<span style="font-size:.72rem;color:#6B7280;margin-left:8px;">'
-                    f'Subido por {subido} · {fecha}</span></div>',
-                    unsafe_allow_html=True,
-                )
-                if url:
-                    file_bytes = _fetch_file(url)
-                    if file_bytes and len(file_bytes) > 0:
-                        st.download_button(
-                            label=f"⬇️ Descargar {name}",
-                            data=file_bytes,
-                            file_name=name,
-                            mime="application/octet-stream",
-                            key=f"dl_{ev_id}",
-                        )
-                    else:
-                        st.warning(f"No se pudo descargar el archivo. URL: {url[:80]}...")
-                        st.link_button(f"🔗 Abrir {name} en navegador", url)
+                col_info, col_btn = st.columns([3, 1])
+                with col_info:
+                    st.markdown(
+                        f'<div style="padding:6px 10px;border-left:3px solid #0D2B6E;'
+                        f'background:#F8FAFF;border-radius:0 6px 6px 0;">'
+                        f'<span style="font-size:.85rem;font-weight:600;color:#0D2B6E;">📄 {name}</span>'
+                        f'<br><span style="font-size:.72rem;color:#6B7280;">'
+                        f'Subido por {subido} · {fecha}</span></div>',
+                        unsafe_allow_html=True,
+                    )
+                with col_btn:
+                    st.link_button("⬇️ Descargar", url, use_container_width=True)
         else:
             st.caption("Sin evidencias adjuntas.")
 
