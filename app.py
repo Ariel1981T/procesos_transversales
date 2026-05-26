@@ -14,18 +14,31 @@ from styles import get_css, badge, avatar, metric_card, progress_bar
 
 from styles import get_css, badge, avatar, metric_card, progress_bar, days_badge, sem_dot
 
-import requests as requests_lib
+import httpx
 
 @st.cache_data(ttl=300, show_spinner="Descargando archivo...")
 def _fetch_file(url):
-    """Download file from URL and cache the bytes."""
+    """Download file from URL using httpx (available via supabase)."""
     try:
-        resp = requests_lib.get(url, timeout=30, allow_redirects=True)
-        if resp.status_code == 200 and len(resp.content) > 0:
-            return resp.content
-        return None
+        with httpx.Client(follow_redirects=True, timeout=30) as client:
+            resp = client.get(url)
+            if resp.status_code == 200 and len(resp.content) > 0:
+                return resp.content
     except Exception:
-        return None
+        pass
+    # Fallback: try urllib from standard library
+    try:
+        import urllib.request
+        import ssl
+        ctx = ssl.create_default_context()
+        req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
+        with urllib.request.urlopen(req, context=ctx, timeout=30) as response:
+            data = response.read()
+            if len(data) > 0:
+                return data
+    except Exception:
+        pass
+    return None
 
 st.set_page_config(
     page_title="IMEMSA · Procesos Transversales",
