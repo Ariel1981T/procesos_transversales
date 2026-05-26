@@ -513,16 +513,24 @@ def page_mis_tareas():
                     try:
                         import cloudinary
                         import cloudinary.uploader
+                        import unicodedata
+                        import re
                         cloudinary.config(
                             cloud_name=st.secrets["cloudinary"]["cloud_name"],
                             api_key=st.secrets["cloudinary"]["api_key"],
                             api_secret=st.secrets["cloudinary"]["api_secret"]
                         )
+                        # Sanitize filename: remove accents and special chars
+                        clean_name = unicodedata.normalize('NFKD', uploaded.name).encode('ascii', 'ignore').decode('ascii')
+                        clean_name = re.sub(r'[^a-zA-Z0-9._-]', '_', clean_name)
+                        ts = datetime.now().strftime('%Y%m%d%H%M%S')
+                        safe_id = f"{ts}_{clean_name}"
+
                         result = cloudinary.uploader.upload(
                             uploaded.getvalue(),
                             resource_type="raw",
                             folder=f"imemsa-procesos/{inst_id}",
-                            public_id=uploaded.name
+                            public_id=safe_id
                         )
                         ev_id = f"EV-{datetime.now().strftime('%Y%m%d%H%M%S')}"
                         sm.append_row(C.HOJA_EVIDENCIAS, [
