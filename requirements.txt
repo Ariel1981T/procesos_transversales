@@ -1,10 +1,4 @@
 streamlit
-gspread
-google-auth
-google-auth-oauthlib
+supabase
 pandas
 openpyxl
-cloudinary
-plotly
-supabase
-requests
