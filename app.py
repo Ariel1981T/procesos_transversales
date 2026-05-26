@@ -515,23 +515,35 @@ def page_mis_tareas():
                         import cloudinary.uploader
                         import unicodedata
                         import re
+                        import tempfile
+                        import os
                         cloudinary.config(
                             cloud_name=st.secrets["cloudinary"]["cloud_name"],
                             api_key=st.secrets["cloudinary"]["api_key"],
                             api_secret=st.secrets["cloudinary"]["api_secret"]
                         )
                         # Sanitize filename: remove accents and special chars
-                        clean_name = unicodedata.normalize('NFKD', uploaded.name).encode('ascii', 'ignore').decode('ascii')
-                        clean_name = re.sub(r'[^a-zA-Z0-9._-]', '_', clean_name)
+                        original_name = uploaded.name
+                        name_part, ext_part = os.path.splitext(original_name)
+                        clean_name = unicodedata.normalize('NFKD', name_part).encode('ascii', 'ignore').decode('ascii')
+                        clean_name = re.sub(r'[^a-zA-Z0-9_-]', '_', clean_name)
                         ts = datetime.now().strftime('%Y%m%d%H%M%S')
                         safe_id = f"{ts}_{clean_name}"
 
+                        # Save to temp file first for reliable binary upload
+                        with tempfile.NamedTemporaryFile(delete=False, suffix=ext_part) as tmp:
+                            tmp.write(uploaded.getvalue())
+                            tmp_path = tmp.name
+
                         result = cloudinary.uploader.upload(
-                            uploaded.getvalue(),
+                            tmp_path,
                             resource_type="raw",
                             folder=f"imemsa-procesos/{inst_id}",
-                            public_id=safe_id
+                            public_id=safe_id,
+                            use_filename=False,
+                            unique_filename=False
                         )
+                        os.unlink(tmp_path)  # Clean up temp file
                         ev_id = f"EV-{datetime.now().strftime('%Y%m%d%H%M%S')}"
                         sm.append_row(C.HOJA_EVIDENCIAS, [
                             ev_id, inst_id, task.get("Numero_Actividad", ""),
