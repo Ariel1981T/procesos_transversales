@@ -14,8 +14,6 @@ from styles import get_css, badge, avatar, metric_card, progress_bar
 
 from styles import get_css, badge, avatar, metric_card, progress_bar, days_badge, sem_dot
 
-import httpx
-
 
 
 st.set_page_config(
@@ -511,43 +509,27 @@ def page_mis_tareas():
                 if st.button("📤 Confirmar subida", key=f"btn_ev_{inst_id}_{task.get('Numero_Actividad','')}",
                              type="primary"):
                     try:
-                        import cloudinary
-                        import cloudinary.uploader
-                        import unicodedata
-                        import re
-                        import tempfile
-                        import os
-                        cloudinary.config(
-                            cloud_name=st.secrets["cloudinary"]["cloud_name"],
-                            api_key=st.secrets["cloudinary"]["api_key"],
-                            api_secret=st.secrets["cloudinary"]["api_secret"]
-                        )
-                        # Sanitize filename: remove accents and special chars
+                        import unicodedata, re, os
                         original_name = uploaded.name
                         name_part, ext_part = os.path.splitext(original_name)
                         clean_name = unicodedata.normalize('NFKD', name_part).encode('ascii', 'ignore').decode('ascii')
                         clean_name = re.sub(r'[^a-zA-Z0-9_-]', '_', clean_name)
                         ts = datetime.now().strftime('%Y%m%d%H%M%S')
-                        safe_id = f"{ts}_{clean_name}"
+                        safe_filename = f"{ts}_{clean_name}{ext_part.lower()}"
+                        storage_path = f"{inst_id}/{safe_filename}"
 
-                        # Save to temp file first for reliable binary upload
-                        with tempfile.NamedTemporaryFile(delete=False, suffix=ext_part) as tmp:
-                            tmp.write(uploaded.getvalue())
-                            tmp_path = tmp.name
-
-                        result = cloudinary.uploader.upload(
-                            tmp_path,
-                            resource_type="raw",
-                            folder=f"imemsa-procesos/{inst_id}",
-                            public_id=safe_id,
-                            use_filename=False,
-                            unique_filename=False
+                        sb = sm.get_client()
+                        file_bytes = uploaded.getvalue()
+                        sb.storage.from_('evidencias').upload(
+                            storage_path, file_bytes,
+                            {"content-type": uploaded.type or "application/octet-stream"}
                         )
-                        os.unlink(tmp_path)  # Clean up temp file
-                        ev_id = f"EV-{datetime.now().strftime('%Y%m%d%H%M%S')}"
+                        public_url = sb.storage.from_('evidencias').get_public_url(storage_path)
+
+                        ev_id = f"EV-{ts}"
                         sm.append_row(C.HOJA_EVIDENCIAS, [
                             ev_id, inst_id, task.get("Numero_Actividad", ""),
-                            uploaded.name, result["secure_url"], result["public_id"],
+                            original_name, public_url, storage_path,
                             datetime.now().strftime("%Y-%m-%d %H:%M:%S"), user.get("Nombre", "")
                         ])
                         sm.update_row_by_id(C.HOJA_AVANCE, "ID_Avance", task.get("ID_Avance", ""),
@@ -1281,7 +1263,8 @@ def _render_activity_row(act, inst, inst_evidencias, inst_comentarios, user):
                 name = ev.get("Nombre_Archivo", "archivo")
                 subido = ev.get("Subido_Por", "")
                 fecha = ev.get("Fecha_Subida", "")
-                ev_id = ev.get("ID_Evidencia", "")
+                # Append download parameter for Supabase Storage
+                dl_url = f"{url}?download={name}" if "supabase" in url else url
                 col_info, col_btn = st.columns([3, 1])
                 with col_info:
                     st.markdown(
@@ -1293,7 +1276,7 @@ def _render_activity_row(act, inst, inst_evidencias, inst_comentarios, user):
                         unsafe_allow_html=True,
                     )
                 with col_btn:
-                    st.link_button("⬇️ Descargar", url, use_container_width=True)
+                    st.link_button("⬇️ Descargar", dl_url, use_container_width=True)
         else:
             st.caption("Sin evidencias adjuntas.")
 
