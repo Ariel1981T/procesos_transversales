@@ -851,7 +851,7 @@ def launch_instance_form():
         st.error("Plantilla no encontrada.")
         return
 
-    st.markdown(f'<div class="section-header">🚀 Lanzar Instancia de: {tpl.get("Nombre", "")}</div>',
+    st.markdown(f'<div class="section-header">🚣 Navegar en la Instancia de: {tpl.get("Nombre", "")}</div>',
                 unsafe_allow_html=True)
 
     st.markdown(f"""
@@ -916,7 +916,7 @@ def launch_instance_form():
             st.markdown("---")
 
         col1, col2 = st.columns(2)
-        submit = col1.form_submit_button("🚀 Confirmar y Lanzar", type="primary",
+        submit = col1.form_submit_button("🚣 Confirmar y Navegar", type="primary",
                                           use_container_width=True)
         cancel = col2.form_submit_button("❌ Cancelar", use_container_width=True)
 
