@@ -694,7 +694,7 @@ def page_biblioteca():
             with c4:
                 veces = tpl.get("Veces_Utilizada", 0)
                 st.metric("Usos", veces)
-                if st.button("🚀 Lanzar", key=f"launch_{tpl.get('ID_Plantilla', '')}"):
+                if st.button("🚣 Navegar", key=f"launch_{tpl.get('ID_Plantilla', '')}"):
                     st.session_state.selected_template = tpl.get("ID_Plantilla", "")
                     st.session_state.show_launch = True
                     st.rerun()
