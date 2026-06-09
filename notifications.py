@@ -171,3 +171,49 @@ def notify_welcome(email, nombre, proceso, actividad, password=""):
     <p style="font-size:12px;color:#888;">Te recomendamos cambiar tu contraseña después del primer ingreso.</p>
     """)
     return _send_email(email, subject, body)
+
+def notify_new_user(email, nombre, password, admin_copy=False, user_email=""):
+    """Notify new user registration with credentials."""
+    if admin_copy:
+        subject = f"📋 Alta de usuario: {nombre}"
+        body = _base_template("Notificación de Alta de Usuario", f"""
+        <p>Se ha registrado un nuevo usuario en la Plataforma de Procesos Transversales:</p>
+        <div style="background:#f0f4fa;padding:15px;border-radius:8px;border-left:4px solid #0D2B6E;margin:15px 0;">
+            <p style="margin:0;"><strong>Nombre:</strong> {nombre}</p>
+            <p style="margin:5px 0 0;"><strong>Correo:</strong> {user_email}</p>
+            <p style="margin:5px 0 0;"><strong>Contraseña:</strong> {password}</p>
+        </div>
+        """)
+    else:
+        subject = "🎉 Bienvenido a la Plataforma de Procesos Transversales IMEMSA"
+        body = _base_template("Bienvenido a IMEMSA Procesos", f"""
+        <p>Hola <strong>{nombre}</strong>,</p>
+        <p>Has sido registrado(a) en la Plataforma de Procesos Transversales del Grupo IMEMSA.</p>
+        <p>Tus credenciales de acceso son:</p>
+        <div style="background:#f0f4fa;padding:15px;border-radius:8px;text-align:center;margin:15px 0;">
+            <p style="margin:0;font-size:12px;color:#666;">Tu correo:</p>
+            <p style="font-size:16px;font-weight:700;color:#0D2B6E;margin:5px 0;">{email}</p>
+            <p style="margin:10px 0 0;font-size:12px;color:#666;">Tu contraseña:</p>
+            <p style="font-size:22px;font-weight:800;color:#0D2B6E;margin:5px 0;">{password}</p>
+        </div>
+        <p>Ingresa a <a href="{APP_URL}" style="color:#0D2B6E;font-weight:bold;">{APP_URL}</a></p>
+        <p style="font-size:12px;color:#888;">Te recomendamos cambiar tu contraseña después del primer ingreso.</p>
+        """)
+    return _send_email(email, subject, body)
+
+
+def notify_password_recovery(email, nombre, password):
+    """Send password recovery email."""
+    subject = "🔑 Recuperación de contraseña — IMEMSA Procesos Transversales"
+    body = _base_template("Recuperación de Contraseña", f"""
+    <p>Hola <strong>{nombre}</strong>,</p>
+    <p>Recibimos una solicitud de recuperación de contraseña para tu cuenta.</p>
+    <div style="background:#f0f4fa;padding:20px;border-radius:8px;text-align:center;margin:15px 0;">
+        <p style="margin:0;font-size:12px;color:#666;">Tu contraseña actual es:</p>
+        <p style="font-size:28px;font-weight:800;color:#0D2B6E;margin:8px 0;">{password}</p>
+    </div>
+    <p>Ingresa a <a href="{APP_URL}" style="color:#0D2B6E;font-weight:bold;">{APP_URL}</a>
+    con tu correo <strong>{email}</strong> y la contraseña de arriba.</p>
+    <p style="font-size:12px;color:#888;">Te recomendamos cambiar tu contraseña después de ingresar.</p>
+    """)
+    return _send_email(email, subject, body)
