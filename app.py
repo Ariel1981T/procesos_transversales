@@ -227,6 +227,27 @@ def login_page():
             unsafe_allow_html=True,
         )
 
+        # Password recovery
+        st.markdown("<div style='height:10px'></div>", unsafe_allow_html=True)
+        if st.checkbox("🔑 ¿Olvidaste tu contraseña?", key="forgot_pwd"):
+            with st.form("recovery_form"):
+                recovery_email = st.text_input("📧 Ingresa tu correo institucional",
+                                                placeholder="tucorreo@imemsa.com.mx")
+                recover_btn = st.form_submit_button("📧 Enviar contraseña por correo",
+                                                     use_container_width=True, type="primary")
+            if recover_btn and recovery_email:
+                if not sm.validate_domain(recovery_email):
+                    st.error("Dominio no autorizado.")
+                else:
+                    recover_user = sm.find_user_by_email(recovery_email)
+                    if not recover_user:
+                        st.error("Correo no registrado en el sistema.")
+                    else:
+                        pwd = recover_user.get("Password", "")
+                        nombre = recover_user.get("Nombre", "")
+                        notif.notify_password_recovery(recovery_email, nombre, pwd)
+                        st.success(f"✅ Se envió tu contraseña al correo {recovery_email}")
+
 
 def header():
     user = st.session_state.user
@@ -1364,14 +1385,15 @@ def pm_autorizaciones():
         solicitante = c1.text_input("👤 Solicitante (Gerente)")
         area = c2.text_input("🏢 Área")
         nombre_proceso = st.text_input("📋 Nombre tentativo del Proceso")
+        correo_gerente = st.text_input("📧 Correo del Gerente", placeholder="correo@imemsa.com.mx")
         tipo = st.selectbox("Tipo de Autorización", C.TIPOS_AUTORIZACION)
         vigencia = st.number_input("📅 Vigencia (días)", min_value=7, max_value=90,
                                     value=C.VIGENCIA_AUTORIZACION_DIAS)
         submit = st.form_submit_button("🔑 Generar Número", type="primary")
 
     if submit:
-        if not solicitante or not nombre_proceso:
-            st.error("Completa los campos obligatorios.")
+        if not solicitante or not nombre_proceso or not correo_gerente:
+            st.error("Completa todos los campos obligatorios.")
         else:
             user = st.session_state.user
             auth_id = sm.get_next_auth_id()
@@ -1387,17 +1409,9 @@ def pm_autorizaciones():
             sm.log_action(user["Nombre"], "Generar autorización", "Autorización", auth_id,
                           f"Para {solicitante}: {nombre_proceso}")
 
-            # Find solicitor email and notify
-            sol_user = None
-            users = sm.get_all_records(C.HOJA_USUARIOS)
-            for u in users:
-                if u.get("Nombre", "").strip().lower() == solicitante.strip().lower():
-                    sol_user = u
-                    break
-            if sol_user:
-                notif.notify_confirmation_number(
-                    sol_user["Correo"], solicitante, auth_id, nombre_proceso, venc
-                )
+            # Send notification to manager and PM admin
+            notif.notify_confirmation_number(correo_gerente, solicitante, auth_id, nombre_proceso, venc)
+            notif.notify_confirmation_number("mgarduno@imemsa.com.mx", solicitante, auth_id, nombre_proceso, venc)
 
             st.success(f"✅ Número de confirmación generado: **{auth_id}**")
             st.markdown(f"""
@@ -1406,6 +1420,7 @@ def pm_autorizaciones():
                 <div style="color:#666;margin-top:0.3rem;">Vigente hasta: {venc}</div>
             </div>
             """, unsafe_allow_html=True)
+            st.info(f"📧 Correo enviado a {correo_gerente} y mgarduno@imemsa.com.mx")
 
     # List existing authorizations
     st.markdown("### Autorizaciones Emitidas")
@@ -1466,7 +1481,7 @@ def pm_dashboard():
             c1, c2, c3 = st.columns([3, 4, 1])
             with c1:
                 st.markdown(f"**{inst.get('ID_Instancia','')}** — {inst.get('Nombre_Instancia','')}")
-                st.caption(f"Gerente: {inst.get('Gerente_Responsable','')} · {badge(inst.get('Estatus',''))}")
+                st.markdown(f"<span style='font-size:.8rem;color:#8592A3;'>Gerente: {inst.get('Gerente_Responsable','')} · {badge(inst.get('Estatus',''))}</span>", unsafe_allow_html=True)
             with c2:
                 st.markdown(progress_bar(pct), unsafe_allow_html=True)
             with c3:
@@ -1506,12 +1521,17 @@ def pm_usuarios():
             pwd = sm.generate_password()
             sm.append_row(C.HOJA_USUARIOS, [uid, nombre, correo, telefono, area, rol, "Sí", pwd])
             sm.log_action(st.session_state.user["Nombre"], "Agregar usuario", "Usuario", uid, nombre)
+
+            # Send notification to new user and PM admin
+            notif.notify_new_user(correo, nombre, pwd)
+            notif.notify_new_user("mgarduno@imemsa.com.mx", nombre, pwd, admin_copy=True, user_email=correo)
+
             st.success(f"✅ Usuario {nombre} agregado ({uid}).")
             st.markdown(f"""
             <div class="info-box">
                 🔑 <strong>Contraseña generada:</strong> <code>{pwd}</code><br>
                 📧 <strong>Correo:</strong> {correo}<br>
-                <em>Comparte esta contraseña al usuario de forma segura.</em>
+                📧 Notificación enviada al usuario y a mgarduno@imemsa.com.mx
             </div>
             """, unsafe_allow_html=True)
 
