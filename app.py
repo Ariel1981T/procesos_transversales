@@ -1498,7 +1498,7 @@ def pm_usuarios():
         df = pd.DataFrame(users)
         st.dataframe(df, use_container_width=True, hide_index=True)
 
-    st.markdown("### Agregar Usuario")
+    st.markdown("### Agregar Solicitante")
     with st.form("add_user"):
         c1, c2 = st.columns(2)
         nombre = c1.text_input("Nombre completo")
