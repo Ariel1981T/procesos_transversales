@@ -301,6 +301,10 @@ def navigation():
             st.session_state.page = "calendario"
             st.rerun()
 
+        if st.button("📊  Mis Procesos", use_container_width=True, key="nav_mis_procesos"):
+            st.session_state.page = "mis_procesos"
+            st.rerun()
+
         if rol in ["Gerente", "PM", "Admin"]:
             st.markdown('<div class="sidebar-divider"></div>', unsafe_allow_html=True)
             st.markdown('<div style="font-size:.7rem;font-weight:600;letter-spacing:1.5px;'
@@ -308,9 +312,6 @@ def navigation():
 
             if st.button("📚  Biblioteca", use_container_width=True, key="nav_biblioteca"):
                 st.session_state.page = "biblioteca"
-                st.rerun()
-            if st.button("📊  Mis Procesos", use_container_width=True, key="nav_mis_procesos"):
-                st.session_state.page = "mis_procesos"
                 st.rerun()
 
         if rol in ["PM", "Admin"]:
@@ -1034,14 +1035,23 @@ def launch_instance_form():
 # ════════════════════════════════════════════
 def page_mis_procesos():
     user = st.session_state.user
+    email = user.get("Correo", "").strip().lower()
     st.markdown('<div class="section-header">📊 Mis Procesos</div>', unsafe_allow_html=True)
 
     instances = sm.get_all_records(C.HOJA_INSTANCIAS)
+    avances = sm.get_all_records(C.HOJA_AVANCE)
     rol = user.get("Rol", "")
+
     if rol in ["PM", "Admin"]:
         my_instances = instances
-    else:
+    elif rol == "Gerente":
+        # Gerente sees processes they launched
         my_instances = [i for i in instances if i.get("Gerente_Responsable") == user.get("Nombre")]
+    else:
+        # Responsable sees processes where they have assigned tasks
+        my_inst_ids = set(a.get("ID_Instancia") for a in avances
+                          if a.get("Correo", "").strip().lower() == email)
+        my_instances = [i for i in instances if i.get("ID_Instancia") in my_inst_ids]
 
     if not my_instances:
         st.markdown('<div class="info-box">No tienes procesos registrados.</div>', unsafe_allow_html=True)
