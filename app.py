@@ -512,7 +512,8 @@ def page_mis_tareas():
             </div>
             <div style="display:flex;justify-content:space-between;align-items:center;margin-top:0.3rem;">
                 <span style="font-size:0.82rem;color:#666;">
-                    🗂️ {inst.get('Nombre_Instancia', inst_id)} &nbsp;|&nbsp;
+                    📋 <strong style="color:#0D2B6E;">{inst_id}</strong> &nbsp;·&nbsp;
+                    🗂️ {inst.get('Nombre_Instancia', '')} &nbsp;|&nbsp;
                     📅 Límite: {task.get('Fecha_Limite','')} &nbsp;|&nbsp; {days_text}
                 </span>
             </div>
@@ -1058,15 +1059,20 @@ def page_mis_procesos():
         return
 
     # Filters
-    c1, c2 = st.columns(2)
+    process_names = sorted(set(i.get("Nombre_Instancia", "") for i in my_instances if i.get("Nombre_Instancia")))
+    c1, c2, c3 = st.columns(3)
     with c1:
         filter_status = st.selectbox("Filtrar por estatus", ["Todos"] + C.ESTATUS_INSTANCIA)
     with c2:
-        search = st.text_input("🔍 Buscar", placeholder="Folio o nombre...")
+        filter_name = st.selectbox("Filtrar por proceso", ["Todos"] + process_names)
+    with c3:
+        search = st.text_input("🔍 Buscar", placeholder="Folio...")
 
     filtered = my_instances
     if filter_status != "Todos":
         filtered = [i for i in filtered if i.get("Estatus") == filter_status]
+    if filter_name != "Todos":
+        filtered = [i for i in filtered if i.get("Nombre_Instancia") == filter_name]
     if search:
         search_l = search.lower()
         filtered = [i for i in filtered if search_l in str(i.get("ID_Instancia", "")).lower()
