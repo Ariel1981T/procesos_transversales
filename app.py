@@ -24,9 +24,7 @@ st.set_page_config(
 )
 st.markdown(get_css(), unsafe_allow_html=True)
 
-# ════════════════════════════════════════════
-# SESSION STATE DEFAULTS
-# ════════════════════════════════════════════
+
 DEFAULTS = {
     "logged_in": False, "user": None, "page": "inicio",
     "selected_instance": None, "selected_template": None,
@@ -37,9 +35,7 @@ for k, v in DEFAULTS.items():
         st.session_state[k] = v
 
 
-# ════════════════════════════════════════════
-# AUTHENTICATION
-# ════════════════════════════════════════════
+
 def login_page():
     st.markdown("""
     <style>
@@ -227,7 +223,7 @@ def login_page():
             unsafe_allow_html=True,
         )
 
-        # Password recovery
+        
         st.markdown("<div style='height:10px'></div>", unsafe_allow_html=True)
         if st.checkbox("🔑 ¿Olvidaste tu contraseña?", key="forgot_pwd"):
             with st.form("recovery_form"):
@@ -340,9 +336,7 @@ def navigation():
             st.rerun()
 
 
-# ════════════════════════════════════════════
-# PAGE: INICIO / DASHBOARD
-# ════════════════════════════════════════════
+
 def page_inicio():
     user = st.session_state.user
     rol = user.get("Rol", "Responsable")
@@ -352,7 +346,7 @@ def page_inicio():
     instances = sm.get_all_records(C.HOJA_INSTANCIAS)
     avances = sm.get_all_records(C.HOJA_AVANCE)
 
-    # Filter: Responsables only see processes where they have tasks
+    
     if rol == "Responsable":
         my_inst_ids = set(a.get("ID_Instancia") for a in avances
                           if a.get("Correo", "").strip().lower() == email)
@@ -391,7 +385,7 @@ def page_inicio():
             folio = inst.get("ID_Instancia", "")
             nombre = inst.get("Nombre_Instancia", "")
 
-            # Find active activity for this instance
+            
             inst_avs = [a for a in avances if a.get("ID_Instancia") == folio
                         and a.get("Estatus") in ["Activa", "Vencida"]]
             active_act = inst_avs[0] if inst_avs else None
@@ -443,9 +437,7 @@ def page_inicio():
                 st.rerun()
 
 
-# ════════════════════════════════════════════
-# PAGE: MIS TAREAS (Bandeja del Responsable)
-# ════════════════════════════════════════════
+
 def page_mis_tareas():
     user = st.session_state.user
     email = user.get("Correo", "").strip().lower()
@@ -459,7 +451,7 @@ def page_mis_tareas():
                 if a.get("Correo", "").strip().lower() == email
                 and a.get("Estatus") in ["Activa", "Vencida"]]
 
-    # Sort: overdue first, then at risk, then on time
+    
     def sort_key(t):
         remaining = sm.remaining_business_days(t.get("Fecha_Limite", ""))
         return remaining
@@ -598,7 +590,7 @@ def complete_activity(task, inst):
     inst_id = task["ID_Instancia"]
     num_act = int(task["Numero_Actividad"])
 
-    # Update current activity
+    
     fecha_cierre = now.strftime("%Y-%m-%d")
     fecha_inicio = task.get("Fecha_Inicio", fecha_cierre)
     try:
@@ -619,7 +611,7 @@ def complete_activity(task, inst):
     sm.log_action(user["Nombre"], "Completar actividad", "Actividad",
                   task["ID_Avance"], f"Act #{num_act} de {inst_id}")
 
-    # Find manager email for notifications
+    
     gerente_nombre = inst.get("Gerente_Responsable", "")
     gerente_user = None
     all_users = sm.get_all_records(C.HOJA_USUARIOS)
@@ -629,7 +621,7 @@ def complete_activity(task, inst):
             break
     gerente_email = gerente_user.get("Correo", "") if gerente_user else ""
 
-    # Notify manager
+    
     if gerente_email:
         notif.notify_task_completed(
             gerente_email, gerente_nombre,
@@ -637,7 +629,7 @@ def complete_activity(task, inst):
             inst.get("Nombre_Instancia", "")
         )
 
-    # Activate next activity
+    
     all_avances = sm.get_all_records(C.HOJA_AVANCE)
     inst_avances = [a for a in all_avances if a["ID_Instancia"] == inst_id]
     inst_avances.sort(key=lambda x: int(x.get("Numero_Actividad", 0)))
@@ -663,7 +655,7 @@ def complete_activity(task, inst):
             dias_next, fecha_limite_next
         )
 
-    # Update instance progress - re-read fresh from DB
+    
     fresh_avances = sm.get_all_records(C.HOJA_AVANCE)
     fresh_inst_avances = [a for a in fresh_avances if a["ID_Instancia"] == inst_id]
     total = len(fresh_inst_avances)
@@ -685,9 +677,7 @@ def complete_activity(task, inst):
     st.rerun()
 
 
-# ════════════════════════════════════════════
-# PAGE: BIBLIOTECA DE PLANTILLAS
-# ════════════════════════════════════════════
+
 def page_biblioteca():
     st.markdown('<div class="section-header">📚 Biblioteca de Plantillas</div>', unsafe_allow_html=True)
 
@@ -723,11 +713,11 @@ def page_biblioteca():
                     st.rerun()
             st.divider()
 
-    # ── Upload Excel Dialog ──
+    
     if st.session_state.get("show_upload"):
         upload_template_form()
 
-    # ── Launch Instance Dialog ──
+    
     if st.session_state.get("show_launch"):
         launch_instance_form()
 
@@ -763,7 +753,7 @@ def upload_template_form():
             st.error("Completa todos los campos obligatorios.")
             return
 
-        # Validate auth code
+        
         auths = sm.get_all_records(C.HOJA_AUTORIZACIONES)
         auth_record = next((a for a in auths if a["ID_Autorizacion"] == auth_code.strip()), None)
         if not auth_record:
@@ -782,21 +772,21 @@ def upload_template_form():
         except ValueError:
             pass
 
-        # Parse Excel
+        
         try:
             df = pd.read_excel(uploaded_file)
         except Exception as e:
             st.error(f"Error al leer el archivo: {e}")
             return
 
-        # Validate columns
+        
         df.columns = df.columns.str.strip()
         missing = [c for c in C.COLUMNAS_EXCEL_OBLIGATORIAS if c not in df.columns]
         if missing:
             st.error(f"❌ Columnas faltantes: {', '.join(missing)}")
             return
 
-        # Validate data
+        
         errors = []
         for i, row in df.iterrows():
             row_num = i + 2
@@ -812,7 +802,7 @@ def upload_template_form():
             st.error("❌ Errores de validación:\n" + "\n".join(errors[:10]))
             return
 
-        # Auto-register new users
+        
         new_users, discrepancies = sm.auto_register_users(df)
         if new_users:
             st.info(f"👥 {len(new_users)} usuario(s) nuevo(s) registrado(s) automáticamente.")
@@ -820,7 +810,7 @@ def upload_template_form():
             for d in discrepancies:
                 st.warning(f"⚠️ {d['email']}: {d['campo']} diferente (existente: {d['existente']}, Excel: {d['nuevo']})")
 
-        # Create template
+        
         user = st.session_state.user
         tpl_id = sm.get_next_id("TPL-", C.HOJA_PLANTILLAS, "ID_Plantilla")
         fases = df["Fase"].nunique()
@@ -832,7 +822,7 @@ def upload_template_form():
             len(df), fases, 0, auth_code, dias_total
         ])
 
-        # Create activities
+        
         for _, row in df.iterrows():
             act_id = f"ACT-{tpl_id}-{int(row['No.']):02d}"
             ev_req = str(row.get("Evidencia requerida", "No")).strip()
@@ -846,7 +836,7 @@ def upload_template_form():
                 int(row["Días teoricos"]), ev_req
             ])
 
-        # Consume authorization
+        
         sm.update_row_by_id(C.HOJA_AUTORIZACIONES, "ID_Autorizacion", auth_code, {
             "Estatus": "Consumida",
             "ID_Vinculado": tpl_id,
@@ -856,7 +846,7 @@ def upload_template_form():
         sm.log_action(user["Nombre"], "Crear plantilla", "Plantilla", tpl_id,
                       f"{nombre} ({len(df)} actividades)")
 
-        # Send welcome emails to new users
+        
         for nu in new_users:
             first_act = df.iloc[0]["Actividad"] if len(df) > 0 else ""
             notif.notify_welcome(nu["Correo"], nu["Nombre"], nombre, first_act, nu.get("Password", ""))
@@ -887,7 +877,7 @@ def launch_instance_form():
     </div>
     """, unsafe_allow_html=True)
 
-    # Load template activities
+    
     all_acts = sm.get_all_records(C.HOJA_ACTIVIDADES_PLANTILLA)
     tpl_acts = [a for a in all_acts if a["ID_Plantilla"] == tpl_id]
     tpl_acts.sort(key=lambda x: int(x.get("Numero", 0)))
@@ -962,13 +952,13 @@ def launch_instance_form():
             st.error("❌ Errores:\n" + "\n".join(errors[:10]))
             return
 
-        # Auto-register new users
+        
         df_users = pd.DataFrame(edited_acts)
         new_users, _ = sm.auto_register_users(df_users)
         if new_users:
             st.info(f"👥 {len(new_users)} usuario(s) nuevo(s) registrado(s).")
 
-        # Create instance
+        
         user = st.session_state.user
         inst_id = sm.get_next_instance_id()
         now = datetime.now()
@@ -982,7 +972,7 @@ def launch_instance_form():
             tpl.get("ID_Autorizacion", "Plantilla aprobada"), "", ""
         ])
 
-        # Create avance records with edited responsables
+        
         for act in edited_acts:
             num = int(act.get("Numero", 0))
             avance_id = f"AV-{inst_id}-{num:02d}"
@@ -1004,7 +994,7 @@ def launch_instance_form():
                 estatus, "", "", act.get("Evidencia_Requerida", "No"), "No"
             ])
 
-        # Notify first responsible
+        
         first = edited_acts[0]
         dias_first = int(first.get("Dias_Teoricos", 1))
         f_limite_first = sm.add_business_days(now.date(), dias_first).strftime("%Y-%m-%d")
@@ -1013,13 +1003,13 @@ def launch_instance_form():
             nombre_inst, first.get("Actividad", ""), dias_first, f_limite_first
         )
 
-        # Send welcome to new users
+        
         for nu in new_users:
             first_act = edited_acts[0].get("Actividad", "") if edited_acts else ""
             notif.notify_welcome(nu["Correo"], nu["Nombre"], nombre_inst,
                                   first_act, nu.get("Password", ""))
 
-        # Update template usage count
+        
         veces = int(tpl.get("Veces_Utilizada", 0)) + 1
         sm.update_cell_by_id(C.HOJA_PLANTILLAS, "ID_Plantilla", tpl_id, "Veces_Utilizada", veces)
 
@@ -1031,9 +1021,7 @@ def launch_instance_form():
         st.rerun()
 
 
-# ════════════════════════════════════════════
-# PAGE: MIS PROCESOS
-# ════════════════════════════════════════════
+
 def page_mis_procesos():
     user = st.session_state.user
     email = user.get("Correo", "").strip().lower()
@@ -1046,10 +1034,10 @@ def page_mis_procesos():
     if rol in ["PM", "Admin"]:
         my_instances = instances
     elif rol == "Gerente":
-        # Gerente sees processes they launched
+        
         my_instances = [i for i in instances if i.get("Gerente_Responsable") == user.get("Nombre")]
     else:
-        # Responsable sees processes where they have assigned tasks
+        
         my_inst_ids = set(a.get("ID_Instancia") for a in avances
                           if a.get("Correo", "").strip().lower() == email)
         my_instances = [i for i in instances if i.get("ID_Instancia") in my_inst_ids]
@@ -1058,7 +1046,7 @@ def page_mis_procesos():
         st.markdown('<div class="info-box">No tienes procesos registrados.</div>', unsafe_allow_html=True)
         return
 
-    # Filters
+    
     process_names = sorted(set(i.get("Nombre_Instancia", "") for i in my_instances if i.get("Nombre_Instancia")))
     c1, c2, c3 = st.columns(3)
     with c1:
@@ -1105,9 +1093,7 @@ def page_mis_procesos():
             st.divider()
 
 
-# ════════════════════════════════════════════
-# PAGE: VER INSTANCIA (Detalle completo)
-# ════════════════════════════════════════════
+
 def page_ver_instancia():
     inst_id = st.session_state.get("selected_instance")
     if not inst_id:
@@ -1153,7 +1139,7 @@ def page_ver_instancia():
     on_time_count = len([a for a in inst_avances if a.get("Estatus") == "Activa"
                          and sm.remaining_business_days(a.get("Fecha_Limite", "")) > C.DIAS_ALERTA_AMARILLA])
 
-    # Back button
+    
     col_back, _ = st.columns([1, 4])
     with col_back:
         if st.button("← Regresar", use_container_width=True):
@@ -1161,7 +1147,7 @@ def page_ver_instancia():
             st.session_state.page = "mis_procesos"
             st.rerun()
 
-    # ── Instance Header Card (Motores style) ──
+    
     st.markdown(
         f'<div style="background:#fff;border-radius:12px;padding:20px 24px;'
         f'margin-bottom:18px;box-shadow:0 1px 6px rgba(13,43,110,.10);border-top:4px solid #0D2B6E;">'
@@ -1187,7 +1173,7 @@ def page_ver_instancia():
         unsafe_allow_html=True,
     )
 
-    # Export button
+    
     col_exp, _ = st.columns([1, 4])
     with col_exp:
         if st.button("⬇️  Exportar a Excel", use_container_width=True):
@@ -1196,7 +1182,7 @@ def page_ver_instancia():
     st.markdown(f'<div class="section-header">🔢 Actividades del Proceso ({total})</div>',
                 unsafe_allow_html=True)
 
-    # ── Activities grouped by phase ──
+    
     current_phase = ""
     for act in inst_avances:
         phase = act.get("Fase", "")
@@ -1224,7 +1210,7 @@ def _render_activity_row(act, inst, inst_evidencias, inst_comentarios, user):
     act_num = act.get("Numero_Actividad", "")
     responsable = act.get("Responsable", "")
 
-    # Determine row class and semaphore
+    
     if estatus_act == "Completada":
         row_cls = "act-row-completada"
         sem = "green"
@@ -1248,7 +1234,7 @@ def _render_activity_row(act, inst, inst_evidencias, inst_comentarios, user):
 
     days_html = days_badge(remaining) if estatus_act in ("Activa",) else ""
 
-    # Dates
+    
     dates_parts = []
     dates_parts.append(f"Plazo: {act.get('Dias_Teoricos', '')} días hábiles")
     if act.get("Fecha_Inicio"):
@@ -1258,7 +1244,7 @@ def _render_activity_row(act, inst, inst_evidencias, inst_comentarios, user):
     if act.get("Fecha_Cierre"):
         dates_parts.append(f"Cierre: {act['Fecha_Cierre']}")
 
-    # Evidence indicator
+    
     act_evidencias = [e for e in inst_evidencias
                       if str(e.get("Numero_Actividad")) == str(act_num)]
     ev_line = ""
@@ -1291,7 +1277,7 @@ def _render_activity_row(act, inst, inst_evidencias, inst_comentarios, user):
         unsafe_allow_html=True,
     )
 
-    # ── Evidence Expander ──
+    
     ev_label = f"📸  Evidencias  ({len(act_evidencias)})" if act_evidencias else "📸  Evidencias"
     with st.expander(ev_label, expanded=False):
         if act_evidencias:
@@ -1317,7 +1303,7 @@ def _render_activity_row(act, inst, inst_evidencias, inst_comentarios, user):
         else:
             st.caption("Sin evidencias adjuntas.")
 
-    # ── Comments Expander ──
+    
     act_comments = [c for c in inst_comentarios
                     if str(c.get("Numero_Actividad")) == str(act_num)]
     com_label = f"💬  Comentarios  ({len(act_comments)})" if act_comments else "💬  Agregar comentario"
@@ -1352,15 +1338,15 @@ def _render_activity_row(act, inst, inst_evidencias, inst_comentarios, user):
 def export_instance_to_excel(inst, avances, evidencias, comentarios):
     output = io.BytesIO()
     with pd.ExcelWriter(output, engine="openpyxl") as writer:
-        # Avances sheet
+        
         df_av = pd.DataFrame(avances)
         if not df_av.empty:
             df_av.to_excel(writer, sheet_name="Actividades", index=False)
-        # Evidencias
+        
         df_ev = pd.DataFrame(evidencias)
         if not df_ev.empty:
             df_ev.to_excel(writer, sheet_name="Evidencias", index=False)
-        # Comentarios
+        
         df_com = pd.DataFrame(comentarios)
         if not df_com.empty:
             df_com.to_excel(writer, sheet_name="Comentarios", index=False)
@@ -1373,9 +1359,7 @@ def export_instance_to_excel(inst, avances, evidencias, comentarios):
     )
 
 
-# ════════════════════════════════════════════
-# PAGE: PANEL DEL PM
-# ════════════════════════════════════════════
+
 def page_pm_panel():
     st.markdown('<div class="section-header">👔 Panel del Project Manager</div>', unsafe_allow_html=True)
 
@@ -1425,7 +1409,7 @@ def pm_autorizaciones():
             sm.log_action(user["Nombre"], "Generar autorización", "Autorización", auth_id,
                           f"Para {solicitante}: {nombre_proceso}")
 
-            # Send notification to manager and PM admin
+            
             notif.notify_confirmation_number(correo_gerente, solicitante, auth_id, nombre_proceso, venc)
             notif.notify_confirmation_number("mgarduno@imemsa.com.mx", solicitante, auth_id, nombre_proceso, venc)
 
@@ -1438,7 +1422,7 @@ def pm_autorizaciones():
             """, unsafe_allow_html=True)
             st.info(f"📧 Correo enviado a {correo_gerente} y mgarduno@imemsa.com.mx")
 
-    # List existing authorizations
+    
     st.markdown("### Autorizaciones Emitidas")
     auths = sm.get_all_records(C.HOJA_AUTORIZACIONES)
     if auths:
@@ -1538,7 +1522,7 @@ def pm_usuarios():
             sm.append_row(C.HOJA_USUARIOS, [uid, nombre, correo, telefono, area, rol, "Sí", pwd])
             sm.log_action(st.session_state.user["Nombre"], "Agregar usuario", "Usuario", uid, nombre)
 
-            # Send notification to new user and PM admin
+            
             notif.notify_new_user(correo, nombre, pwd)
             notif.notify_new_user("mgarduno@imemsa.com.mx", nombre, pwd, admin_copy=True, user_email=correo)
 
@@ -1551,7 +1535,7 @@ def pm_usuarios():
             </div>
             """, unsafe_allow_html=True)
 
-    # Reset password section
+    
     st.markdown("### 🔄 Restablecer Contraseña")
     with st.form("reset_pwd"):
         reset_email = st.text_input("Correo del usuario")
@@ -1576,9 +1560,7 @@ def pm_usuarios():
             """, unsafe_allow_html=True)
 
 
-# ════════════════════════════════════════════
-# PAGE: ADMIN
-# ════════════════════════════════════════════
+
 def page_admin():
     st.markdown('<div class="section-header">⚙️ Administración del Sistema</div>', unsafe_allow_html=True)
 
@@ -1635,9 +1617,7 @@ def generate_template_excel():
     )
 
 
-# ════════════════════════════════════════════
-# PAGE: CAMBIAR CONTRASEÑA
-# ════════════════════════════════════════════
+
 def page_cambiar_pwd():
     st.markdown('<div class="section-header">🔑 Cambiar Contraseña</div>', unsafe_allow_html=True)
 
@@ -1666,9 +1646,7 @@ def page_cambiar_pwd():
             st.success("✅ Contraseña cambiada exitosamente.")
 
 
-# ════════════════════════════════════════════
-# PAGE: CALENDARIO GANTT
-# ════════════════════════════════════════════
+
 def page_calendario():
     user = st.session_state.user
     rol = user.get("Rol", "Responsable")
@@ -1701,7 +1679,7 @@ def page_calendario():
         inst_avs = [a for a in avances if a.get("ID_Instancia") == inst_id]
         inst_avs.sort(key=lambda x: int(x.get("Numero_Actividad", 0)))
 
-        # Calculate estimated dates for pending tasks
+        
         last_end = None
         activities_js = []
         for a in inst_avs:
@@ -1862,9 +1840,7 @@ def page_calendario():
     chart_height = max(450, all_acts_count * 30 + 180)
     components.html(gantt_html, height=chart_height, scrolling=True)
 
-# ════════════════════════════════════════════
-# MAIN ROUTING
-# ════════════════════════════════════════════
+
 def main():
     if not st.session_state.logged_in:
         login_page()
